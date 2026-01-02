@@ -1,1 +1,15 @@
-﻿期数id
+﻿期数id,比赛id,赛事,时间,主队,客队,全场主队得分,全场客队得分,主胜SP值,主平SP值,主负SP值,分析链接
+25184,1312651,欧联,12-12 01:45,中日德兰,亨克,1,0,1.71,4.06,4.31,https://www.okooo.com/soccer/match/1312651/history/
+25184,1312653,欧联,12-12 01:45,尼斯,布拉加,0,1,3.17,3.51,2.17,https://www.okooo.com/soccer/match/1312653/history/
+25184,1312654,欧联,12-12 01:45,格拉茨风暴,贝尔格莱德红星,0,1,3.13,3.70,2.12,https://www.okooo.com/soccer/match/1312654/history/
+25184,1312656,欧联,12-12 01:45,乌德勒支,诺丁汉森林,1,2,4.35,3.64,1.79,https://www.okooo.com/soccer/match/1312656/history/
+25184,1312657,欧联,12-12 01:45,年轻人,里尔,1,0,5.02,4.09,1.62,https://www.okooo.com/soccer/match/1312657/history/
+25184,1312658,欧联,12-12 04:00,巴塞尔,维拉,1,2,4.32,3.98,1.73,https://www.okooo.com/soccer/match/1312658/history/
+25184,1312659,欧联,12-12 04:00,布兰,费内巴切,0,4,3.41,3.40,2.11,https://www.okooo.com/soccer/match/1312659/history/
+25184,1312661,欧联,12-12 04:00,凯尔特人,罗马,0,3,3.01,3.33,2.32,https://www.okooo.com/soccer/match/1312661/history/
+25184,1312660,欧联,12-12 04:00,塞尔塔,博洛尼亚,1,2,2.27,3.42,3.06,https://www.okooo.com/soccer/match/1312660/history/
+25184,1312664,欧联,12-12 04:00,弗赖堡,萨尔茨堡,1,0,1.41,4.78,6.93,https://www.okooo.com/soccer/match/1312664/history/
+25184,1312665,欧联,12-12 04:00,里昂,前进之鹰,2,1,1.21,6.62,12.36,https://www.okooo.com/soccer/match/1312665/history/
+25184,1312666,欧联,12-12 04:00,帕纳辛纳科斯,比尔森,0,0,2.13,3.27,3.51,https://www.okooo.com/soccer/match/1312666/history/
+25184,1312662,欧联,12-12 04:00,波尔图,马尔默,2,1,1.17,7.05,15.77,https://www.okooo.com/soccer/match/1312662/history/
+25184,1312663,欧联,12-12 04:00,布加勒斯特星,费耶诺德,4,3,4.63,4.01,1.68,https://www.okooo.com/soccer/match/1312663/history/

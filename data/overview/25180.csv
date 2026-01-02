@@ -1,1 +1,15 @@
-﻿期数id
+﻿期数id,比赛id,赛事,时间,主队,客队,全场主队得分,全场客队得分,主胜SP值,主平SP值,主负SP值,分析链接
+25180,1295874,英超,12-06 23:00,伯恩茅斯,切尔西,0,0,3.31,3.74,2.07,https://www.okooo.com/soccer/match/1295874/history/
+25180,1295877,英超,12-06 23:00,埃弗顿,诺丁汉森林,3,0,2.09,3.27,3.71,https://www.okooo.com/soccer/match/1295877/history/
+25180,1295881,英超,12-06 23:00,纽卡斯尔,伯恩利,2,1,1.31,5.53,9.37,https://www.okooo.com/soccer/match/1295881/history/
+25180,1295882,英超,12-06 23:00,热刺,布伦特,2,0,2.42,3.36,2.92,https://www.okooo.com/soccer/match/1295882/history/
+25180,1295880,英超,12-06 23:00,曼城,桑德兰,3,0,1.26,6.15,10.37,https://www.okooo.com/soccer/match/1295880/history/
+25180,1295879,英超,12-07 01:30,利兹联,利物浦,3,3,4.40,3.89,1.76,https://www.okooo.com/soccer/match/1295879/history/
+25180,1299894,德甲,12-06 22:30,奥格斯堡,勒沃库森,2,0,3.40,3.58,2.07,https://www.okooo.com/soccer/match/1299894/history/
+25180,1299892,德甲,12-06 22:30,斯图加特,拜仁,0,5,4.78,4.71,1.58,https://www.okooo.com/soccer/match/1299892/history/
+25180,1299893,德甲,12-06 22:30,沃尔夫斯堡,柏林联合,3,1,2.04,3.43,3.63,https://www.okooo.com/soccer/match/1299893/history/
+25180,1299895,德甲,12-06 22:30,海登海姆,弗赖堡,2,1,4.58,3.54,1.80,https://www.okooo.com/soccer/match/1299895/history/
+25180,1299891,德甲,12-07 01:30,莱比锡,法兰克福,6,0,1.74,4.05,4.27,https://www.okooo.com/soccer/match/1299891/history/
+25180,1292702,意甲,12-07 01:00,国际米兰,科莫,4,0,1.55,4.20,5.82,https://www.okooo.com/soccer/match/1292702/history/
+25180,1302695,西甲,12-07 01:30,贝蒂斯,巴萨,3,5,3.68,4.17,1.85,https://www.okooo.com/soccer/match/1302695/history/
+25180,1302691,西甲,12-07 04:00,毕尔巴鄂,马竞,1,0,2.89,3.20,2.53,https://www.okooo.com/soccer/match/1302691/history/

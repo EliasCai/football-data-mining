@@ -1,1 +1,15 @@
-﻿期数id
+﻿期数id,比赛id,赛事,时间,主队,客队,全场主队得分,全场客队得分,主胜SP值,主平SP值,主负SP值,分析链接
+25178,1295865,英超,12-04 03:30,阿森纳,布伦特,2,0,1.42,4.59,7.64,https://www.okooo.com/soccer/match/1295865/history/
+25178,1295866,英超,12-04 03:30,布莱顿,维拉,3,4,2.22,3.43,3.20,https://www.okooo.com/soccer/match/1295866/history/
+25178,1295867,英超,12-04 03:30,伯恩利,水晶宫,0,1,4.97,3.65,1.73,https://www.okooo.com/soccer/match/1295867/history/
+25178,1295871,英超,12-04 03:30,狼队,诺丁汉森林,0,1,3.12,3.24,2.35,https://www.okooo.com/soccer/match/1295871/history/
+25178,1295869,英超,12-04 04:15,利兹联,切尔西,3,1,3.96,3.50,1.95,https://www.okooo.com/soccer/match/1295869/history/
+25178,1295872,英超,12-04 04:15,利物浦,桑德兰,1,1,1.36,5.24,7.96,https://www.okooo.com/soccer/match/1295872/history/
+25178,1295873,英超,12-05 04:00,曼联,西汉姆,1,1,1.40,5.02,7.13,https://www.okooo.com/soccer/match/1295873/history/
+25178,1315257,德国杯,12-04 01:00,弗赖堡,达姆施塔特,2,0,1.63,3.92,4.93,https://www.okooo.com/soccer/match/1315257/history/
+25178,1315253,德国杯,12-04 03:45,汉堡,基尔,0,0,1.72,3.88,4.30,https://www.okooo.com/soccer/match/1315253/history/
+25178,1315254,德国杯,12-04 03:45,柏林联合,拜仁,2,3,8.62,5.41,1.30,https://www.okooo.com/soccer/match/1315254/history/
+25178,1314468,意大利杯,12-04 01:00,那不勒斯,卡利亚里,1,1,1.41,4.35,7.78,https://www.okooo.com/soccer/match/1314468/history/
+25178,1314462,意大利杯,12-05 01:00,博洛尼亚,帕尔马,2,1,1.45,4.30,6.86,https://www.okooo.com/soccer/match/1314462/history/
+25178,1314461,意大利杯,12-05 04:00,拉齐奥,AC米兰,1,0,3.29,3.05,2.31,https://www.okooo.com/soccer/match/1314461/history/
+25178,1302731,西甲,12-04 02:00,毕尔巴鄂,皇马,0,3,4.28,3.72,1.81,https://www.okooo.com/soccer/match/1302731/history/

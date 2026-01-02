@@ -1,1 +1,15 @@
-﻿期数id
+﻿期数id,比赛id,赛事,时间,主队,客队,全场主队得分,全场客队得分,主胜SP值,主平SP值,主负SP值,分析链接
+25183,1311630,亚冠,12-10 18:00,首尔FC,墨尔本城,1,1,1.85,3.37,3.97,https://www.okooo.com/soccer/match/1311630/history/
+25183,1312514,欧冠,12-11 01:45,卡拉巴,阿贾克斯,2,4,2.10,3.73,3.22,https://www.okooo.com/soccer/match/1312514/history/
+25183,1312515,欧冠,12-11 01:45,比利亚雷,哥本哈根,2,3,1.40,5.14,6.71,https://www.okooo.com/soccer/match/1312515/history/
+25183,1312522,欧冠,12-11 04:00,本菲卡,那不勒斯,2,0,2.71,3.08,2.78,https://www.okooo.com/soccer/match/1312522/history/
+25183,1312516,欧冠,12-11 04:00,毕尔巴鄂,巴黎圣曼,0,0,4.45,3.86,1.75,https://www.okooo.com/soccer/match/1312516/history/
+25183,1312519,欧冠,12-11 04:00,布鲁日,阿森纳,0,3,7.19,5.04,1.39,https://www.okooo.com/soccer/match/1312519/history/
+25183,1312518,欧冠,12-11 04:00,多特蒙德,博德闪耀,2,2,1.35,5.57,7.44,https://www.okooo.com/soccer/match/1312518/history/
+25183,1312520,欧冠,12-11 04:00,尤文,AEP帕福斯,2,0,1.17,7.34,15.23,https://www.okooo.com/soccer/match/1312520/history/
+25183,1312517,欧冠,12-11 04:00,勒沃库森,纽卡斯尔,2,2,3.20,3.68,2.13,https://www.okooo.com/soccer/match/1312517/history/
+25183,1312521,欧冠,12-11 04:00,皇马,曼城,1,2,3.13,3.89,2.11,https://www.okooo.com/soccer/match/1312521/history/
+25183,1299370,英冠,12-11 03:45,布里斯托,莱切城,2,2,2.26,3.34,3.05,https://www.okooo.com/soccer/match/1299370/history/
+25183,1299371,英冠,12-11 03:45,德比郡,米尔沃尔,1,1,2.66,3.07,2.73,https://www.okooo.com/soccer/match/1299371/history/
+25183,1299373,英冠,12-11 03:45,伊普斯,斯托克城,1,0,1.57,3.85,5.77,https://www.okooo.com/soccer/match/1299373/history/
+25183,1299372,英冠,12-11 04:00,赫尔城,雷克斯汉姆,2,0,2.44,3.33,2.78,https://www.okooo.com/soccer/match/1299372/history/

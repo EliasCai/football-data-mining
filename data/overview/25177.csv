@@ -1,1 +1,15 @@
-﻿期数id
+﻿期数id,比赛id,赛事,时间,主队,客队,全场主队得分,全场客队得分,主胜SP值,主平SP值,主负SP值,分析链接
+25177,1295864,英超,12-03 03:30,伯恩茅斯,埃弗顿,0,1,2.17,3.40,3.33,https://www.okooo.com/soccer/match/1295864/history/
+25177,1295868,英超,12-03 03:30,富勒姆,曼城,4,5,5.14,4.11,1.63,https://www.okooo.com/soccer/match/1295868/history/
+25177,1295870,英超,12-03 04:15,纽卡斯尔,热刺,2,2,1.83,3.80,4.13,https://www.okooo.com/soccer/match/1295870/history/
+25177,1311263,英冠,12-02 04:00,伯明翰,沃特福德,2,1,1.78,3.61,4.35,https://www.okooo.com/soccer/match/1311263/history/
+25177,1315256,德国杯,12-03 01:00,柏林赫塔,凯泽斯劳滕,6,1,1.93,3.65,3.59,https://www.okooo.com/soccer/match/1315256/history/
+25177,1315258,德国杯,12-03 01:00,门兴,圣保利,1,2,1.73,3.62,4.66,https://www.okooo.com/soccer/match/1315258/history/
+25177,1315252,德国杯,12-03 04:00,多特蒙德,勒沃库森,0,1,1.79,3.91,3.96,https://www.okooo.com/soccer/match/1315252/history/
+25177,1315259,德国杯,12-03 04:00,莱比锡,马格德堡,3,1,1.25,6.21,9.08,https://www.okooo.com/soccer/match/1315259/history/
+25177,1292692,意甲,12-02 03:45,博洛尼亚,克雷莫纳,1,3,1.51,4.13,6.66,https://www.okooo.com/soccer/match/1292692/history/
+25177,1314463,意大利杯,12-03 04:00,尤文,乌迪内斯,2,0,1.35,4.86,8.43,https://www.okooo.com/soccer/match/1314463/history/
+25177,1302688,西甲,12-02 04:00,巴列卡诺,巴伦西亚,1,1,2.05,3.22,3.88,https://www.okooo.com/soccer/match/1302688/history/
+25177,1302735,西甲,12-03 04:00,巴萨,马竞,3,1,1.70,4.25,4.31,https://www.okooo.com/soccer/match/1302735/history/
+25177,1297700,荷乙,12-02 03:00,埃因青年队,瓦尔韦克,3,1,3.41,4.10,1.82,https://www.okooo.com/soccer/match/1297700/history/
+25177,1307862,葡超,12-02 04:15,阿罗卡,布拉加,0,4,6.49,4.29,1.46,https://www.okooo.com/soccer/match/1307862/history/

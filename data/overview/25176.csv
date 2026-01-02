@@ -1,1 +1,15 @@
-﻿期数id
+﻿期数id,比赛id,赛事,时间,主队,客队,全场主队得分,全场客队得分,主胜SP值,主平SP值,主负SP值,分析链接
+25176,1295854,英超,11-30 22:05,维拉,狼队,1,0,1.47,4.44,6.62,https://www.okooo.com/soccer/match/1295854/history/
+25176,1295860,英超,11-30 22:05,诺丁汉森林,布莱顿,0,2,2.83,3.29,2.51,https://www.okooo.com/soccer/match/1295860/history/
+25176,1295863,英超,11-30 22:05,西汉姆,利物浦,0,2,4.95,4.45,1.59,https://www.okooo.com/soccer/match/1295863/history/
+25176,1295856,英超,12-01 00:30,切尔西,阿森纳,1,1,3.08,3.16,2.42,https://www.okooo.com/soccer/match/1295856/history/
+25176,1299888,德甲,11-30 22:30,汉堡,斯图加特,2,1,2.79,3.54,2.40,https://www.okooo.com/soccer/match/1299888/history/
+25176,1299882,德甲,12-01 00:30,法兰克福,沃尔夫斯堡,1,1,1.90,3.92,3.63,https://www.okooo.com/soccer/match/1299882/history/
+25176,1299883,德甲,12-01 02:30,弗赖堡,美因茨,4,0,1.77,3.68,4.56,https://www.okooo.com/soccer/match/1299883/history/
+25176,1292686,意甲,11-30 22:00,比萨,国际米兰,0,2,10.90,5.91,1.26,https://www.okooo.com/soccer/match/1292686/history/
+25176,1292693,意甲,12-01 01:00,亚特兰大,佛罗伦萨,2,0,1.65,3.82,5.26,https://www.okooo.com/soccer/match/1292693/history/
+25176,1292685,意甲,12-01 03:45,罗马,那不勒斯,0,1,2.71,2.78,3.04,https://www.okooo.com/soccer/match/1292685/history/
+25176,1302682,西甲,11-30 23:15,塞维利亚,贝蒂斯,0,2,2.73,3.24,2.62,https://www.okooo.com/soccer/match/1302682/history/
+25176,1302685,西甲,12-01 01:30,塞尔塔,西班牙人,0,1,1.90,3.44,4.14,https://www.okooo.com/soccer/match/1302685/history/
+25176,1302686,西甲,12-01 04:00,赫罗纳,皇马,1,1,7.01,5.40,1.37,https://www.okooo.com/soccer/match/1302686/history/
+25176,1301361,法甲,11-30 22:00,斯特拉斯,布雷斯特,1,2,1.79,3.78,4.23,https://www.okooo.com/soccer/match/1301361/history/

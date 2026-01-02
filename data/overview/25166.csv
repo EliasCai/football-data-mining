@@ -1,1 +1,15 @@
-﻿期数id
+﻿期数id,比赛id,赛事,时间,主队,客队,全场主队得分,全场客队得分,主胜SP值,主平SP值,主负SP值,分析链接
+25166,1315352,世亚预,11-14 00:00,阿联酋,伊拉克,1,1,2.24,2.68,3.75,https://www.okooo.com/soccer/match/1315352/history/
+25166,1280840,世欧预,11-14 03:45,英格兰,塞尔维亚,2,0,1.28,5.50,10.77,https://www.okooo.com/soccer/match/1280840/history/
+25166,1280760,世欧预,11-14 03:45,爱尔兰,葡萄牙,2,0,8.25,4.49,1.40,https://www.okooo.com/soccer/match/1280760/history/
+25166,1280800,世欧预,11-14 03:45,摩尔多瓦,意大利,0,2,24.06,10.15,1.09,https://www.okooo.com/soccer/match/1280800/history/
+25166,1280880,世欧预,11-15 03:45,克罗地亚,法罗群岛,3,1,1.08,10.38,26.68,https://www.okooo.com/soccer/match/1280880/history/
+25166,1280711,世欧预,11-15 03:45,卢森堡,德国,0,2,24.28,10.18,1.09,https://www.okooo.com/soccer/match/1280711/history/
+25166,1280712,世欧预,11-15 03:45,斯洛伐克,北爱尔兰,1,0,2.13,2.98,3.89,https://www.okooo.com/soccer/match/1280712/history/
+25166,1280860,世欧预,11-15 03:45,波兰,荷兰,1,1,4.54,3.63,1.78,https://www.okooo.com/soccer/match/1280860/history/
+25166,1280747,世欧预,11-16 01:00,格鲁吉亚,西班牙,0,4,11.74,6.31,1.23,https://www.okooo.com/soccer/match/1280747/history/
+25166,1280748,世欧预,11-16 01:00,土耳其,保加利亚,2,0,1.10,9.81,21.31,https://www.okooo.com/soccer/match/1280748/history/
+25166,1280780,世欧预,11-16 03:45,波黑,罗马尼亚,3,1,2.54,3.21,2.80,https://www.okooo.com/soccer/match/1280780/history/
+25166,1280723,世欧预,11-16 03:45,希腊,苏格兰,3,2,2.18,3.19,3.42,https://www.okooo.com/soccer/match/1280723/history/
+25166,1280699,世欧预,11-16 03:45,斯洛文尼亚,科索沃,0,2,2.37,2.99,3.30,https://www.okooo.com/soccer/match/1280699/history/
+25166,1280700,世欧预,11-16 03:45,瑞士,瑞典,4,1,1.53,4.10,6.16,https://www.okooo.com/soccer/match/1280700/history/

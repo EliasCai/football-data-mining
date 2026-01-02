@@ -1,1 +1,15 @@
-﻿期数id
+﻿期数id,比赛id,赛事,时间,主队,客队,全场主队得分,全场客队得分,主胜SP值,主平SP值,主负SP值,分析链接
+25185,1299384,英冠,12-13 04:00,西布朗,谢菲联,2,0,2.38,3.33,2.87,https://www.okooo.com/soccer/match/1299384/history/
+25185,1299904,德甲,12-13 03:30,柏林联合,莱比锡,3,1,3.07,3.38,2.30,https://www.okooo.com/soccer/match/1299904/history/
+25185,1307593,德乙,12-13 01:30,德累斯顿,不伦瑞克,2,3,2.21,3.22,3.23,https://www.okooo.com/soccer/match/1307593/history/
+25185,1307590,德乙,12-13 01:30,菲尔特,柏林赫塔,3,3,3.84,3.69,1.85,https://www.okooo.com/soccer/match/1307590/history/
+25185,1292709,意甲,12-13 03:45,莱切,比萨,1,0,2.49,2.84,3.31,https://www.okooo.com/soccer/match/1292709/history/
+25185,1302709,西甲,12-13 04:00,皇家社会,赫罗纳,1,2,1.77,3.67,4.55,https://www.okooo.com/soccer/match/1302709/history/
+25185,1301375,法甲,12-13 03:45,昂热,南特,4,1,2.15,3.16,3.61,https://www.okooo.com/soccer/match/1301375/history/
+25185,1301824,法乙,12-13 03:00,阿纳西,勒芒,1,2,2.44,2.93,3.02,https://www.okooo.com/soccer/match/1301824/history/
+25185,1301827,法乙,12-13 03:00,南锡,克莱蒙,1,0,1.97,3.36,3.62,https://www.okooo.com/soccer/match/1301827/history/
+25185,1301822,法乙,12-13 03:00,拉瓦勒,敦刻尔克,1,2,3.32,2.96,2.26,https://www.okooo.com/soccer/match/1301822/history/
+25185,1301826,法乙,12-13 03:00,波城,亚眠,1,2,1.52,4.22,5.38,https://www.okooo.com/soccer/match/1301826/history/
+25185,1301825,法乙,12-13 03:00,罗德兹,甘冈,2,1,2.34,3.36,2.80,https://www.okooo.com/soccer/match/1301825/history/
+25185,1297713,荷乙,12-13 03:00,多德勒支,埃因FC,3,4,2.06,3.43,3.25,https://www.okooo.com/soccer/match/1297713/history/
+25185,1297718,荷乙,12-13 03:00,奥斯,海牙,3,4,6.10,4.70,1.41,https://www.okooo.com/soccer/match/1297718/history/

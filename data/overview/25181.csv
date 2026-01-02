@@ -1,1 +1,15 @@
-﻿期数id
+﻿期数id,比赛id,赛事,时间,主队,客队,全场主队得分,全场客队得分,主胜SP值,主平SP值,主负SP值,分析链接
+25181,1295878,英超,12-08 00:30,富勒姆,水晶宫,1,2,2.51,3.30,2.84,https://www.okooo.com/soccer/match/1295878/history/
+25181,1299897,德甲,12-07 22:30,汉堡,不来梅,3,2,2.36,3.46,2.89,https://www.okooo.com/soccer/match/1299897/history/
+25181,1299889,德甲,12-08 00:30,多特蒙德,霍芬海姆,2,0,1.62,4.43,4.69,https://www.okooo.com/soccer/match/1299889/history/
+25181,1292704,意甲,12-07 22:00,卡利亚里,罗马,1,0,5.86,3.54,1.66,https://www.okooo.com/soccer/match/1292704/history/
+25181,1292701,意甲,12-08 01:00,拉齐奥,博洛尼亚,1,1,2.34,3.02,3.37,https://www.okooo.com/soccer/match/1292701/history/
+25181,1292700,意甲,12-08 03:45,那不勒斯,尤文,2,1,2.58,2.85,3.15,https://www.okooo.com/soccer/match/1292700/history/
+25181,1302693,西甲,12-07 21:00,埃尔切,赫罗纳,3,0,2.10,3.30,3.61,https://www.okooo.com/soccer/match/1302693/history/
+25181,1302700,西甲,12-07 23:15,巴伦西亚,塞维利亚,1,1,2.00,3.36,3.88,https://www.okooo.com/soccer/match/1302700/history/
+25181,1302694,西甲,12-08 01:30,西班牙人,巴列卡诺,1,0,2.36,3.15,3.15,https://www.okooo.com/soccer/match/1302694/history/
+25181,1302696,西甲,12-08 04:00,皇马,塞尔塔,0,2,1.27,6.14,9.63,https://www.okooo.com/soccer/match/1302696/history/
+25181,1301370,法甲,12-07 22:00,尼斯,昂热,0,1,1.81,3.64,4.35,https://www.okooo.com/soccer/match/1301370/history/
+25181,1301368,法甲,12-08 00:15,欧塞尔,梅斯,3,1,1.99,3.46,3.76,https://www.okooo.com/soccer/match/1301368/history/
+25181,1301367,法甲,12-08 00:15,勒阿弗尔,巴黎FC,0,0,2.80,3.18,2.59,https://www.okooo.com/soccer/match/1301367/history/
+25181,1301372,法甲,12-08 03:45,洛里昂,里昂,1,0,3.64,3.38,2.06,https://www.okooo.com/soccer/match/1301372/history/

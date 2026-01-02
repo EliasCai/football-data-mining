@@ -1,1 +1,15 @@
-﻿期数id
+﻿期数id,比赛id,赛事,时间,主队,客队,全场主队得分,全场客队得分,主胜SP值,主平SP值,主负SP值,分析链接
+25190,1295898,英超,12-20 23:00,伯恩茅斯,伯恩利,1,1,1.47,4.63,6.43,https://www.okooo.com/soccer/match/1295898/history/
+25190,1295894,英超,12-20 23:00,曼城,西汉姆,3,0,1.20,7.44,12.16,https://www.okooo.com/soccer/match/1295894/history/
+25190,1295897,英超,12-20 23:00,狼队,布伦特,0,2,3.41,3.38,2.15,https://www.okooo.com/soccer/match/1295897/history/
+25190,1295896,英超,12-21 01:30,热刺,利物浦,1,2,3.57,3.60,2.02,https://www.okooo.com/soccer/match/1295896/history/
+25190,1295901,英超,12-21 04:00,埃弗顿,阿森纳,0,1,6.24,4.04,1.55,https://www.okooo.com/soccer/match/1295901/history/
+25190,1295903,英超,12-21 04:00,利兹联,水晶宫,4,1,2.81,3.09,2.66,https://www.okooo.com/soccer/match/1295903/history/
+25190,1299914,德甲,12-20 22:30,科隆,柏林联合,0,1,2.55,3.20,2.85,https://www.okooo.com/soccer/match/1299914/history/
+25190,1299915,德甲,12-20 22:30,汉堡,法兰克福,1,1,2.46,3.39,2.81,https://www.okooo.com/soccer/match/1299915/history/
+25190,1299911,德甲,12-20 22:30,沃尔夫斯堡,弗赖堡,3,4,2.44,3.42,2.82,https://www.okooo.com/soccer/match/1299911/history/
+25190,1299909,德甲,12-21 01:30,莱比锡,勒沃库森,1,3,2.09,3.82,3.18,https://www.okooo.com/soccer/match/1299909/history/
+25190,1292720,意甲,12-21 01:00,拉齐奥,克雷莫纳,0,0,1.55,3.91,6.50,https://www.okooo.com/soccer/match/1292720/history/
+25190,1292719,意甲,12-21 03:45,尤文,罗马,2,1,2.03,3.12,4.17,https://www.okooo.com/soccer/match/1292719/history/
+25190,1302714,西甲,12-20 23:15,莱万特,皇家社会,1,1,3.04,3.28,2.37,https://www.okooo.com/soccer/match/1302714/history/
+25190,1302715,西甲,12-21 04:00,皇马,塞维利亚,2,0,1.20,7.17,12.63,https://www.okooo.com/soccer/match/1302715/history/

@@ -1,1 +1,15 @@
-﻿期数id
+﻿期数id,比赛id,赛事,时间,主队,客队,全场主队得分,全场客队得分,主胜SP值,主平SP值,主负SP值,分析链接
+25192,1311631,亚冠,12-23 00:00,沙瑞加,利雅新月,0,1,5.58,4.30,1.48,https://www.okooo.com/soccer/match/1311631/history/
+25192,1311634,亚冠,12-23 02:15,巴格达警察,吉达国民,0,5,3.92,3.70,1.78,https://www.okooo.com/soccer/match/1311634/history/
+25192,1311635,亚冠,12-24 00:00,多哈萨德,迪拜青年国民,4,2,2.39,3.50,2.62,https://www.okooo.com/soccer/match/1311635/history/
+25192,1311636,亚冠,12-24 02:15,吉达联合,纳萨夫,1,0,1.16,7.06,12.07,https://www.okooo.com/soccer/match/1311636/history/
+25192,1314895,英超,12-23 04:00,富勒姆,诺丁汉森林,1,0,2.55,3.31,2.79,https://www.okooo.com/soccer/match/1314895/history/
+25192,1315160,英联杯,12-24 04:00,阿森纳,水晶宫,1,1,1.49,4.30,6.42,https://www.okooo.com/soccer/match/1315160/history/
+25192,1302711,西甲,12-23 04:00,毕尔巴鄂,西班牙人,1,2,1.85,3.34,4.63,https://www.okooo.com/soccer/match/1302711/history/
+25192,1287436,非洲杯,12-22 22:00,马里,赞比亚,1,1,1.73,3.31,5.32,https://www.okooo.com/soccer/match/1287436/history/
+25192,1287438,非洲杯,12-23 01:00,南非,安哥拉,2,1,2.76,2.64,3.04,https://www.okooo.com/soccer/match/1287438/history/
+25192,1287437,非洲杯,12-23 04:00,埃及,津巴布韦,2,1,1.32,4.55,11.04,https://www.okooo.com/soccer/match/1287437/history/
+25192,1287441,非洲杯,12-23 23:00,塞内加尔,博茨瓦纳,3,0,1.11,8.38,22.92,https://www.okooo.com/soccer/match/1287441/history/
+25192,1287444,非洲杯,12-24 20:30,布基纳法索,赤道几内亚,2,1,1.87,2.97,5.01,https://www.okooo.com/soccer/match/1287444/history/
+25192,1287445,非洲杯,12-25 01:30,科特迪瓦,莫桑比克,1,0,1.28,5.01,11.70,https://www.okooo.com/soccer/match/1287445/history/
+25192,1287446,非洲杯,12-25 04:00,喀麦隆,加蓬,1,0,1.98,3.05,4.21,https://www.okooo.com/soccer/match/1287446/history/
