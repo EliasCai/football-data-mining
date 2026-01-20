@@ -99,22 +99,32 @@ class Ren9QuantSystem:
         self.bonus_cycle = self.analyze_bonus_cycle()
     
     def calculate_league_weights(self):
-        """根据卡方检验结果计算联赛权重"""
-        # P值越低，赔率效率越低，潜在机会越多
+        """
+        优化后的联赛权重计算（科学重构）：
+        1. 使用连续的 P 值评估，避免硬分界
+        2. 使用根号样本量计算置信度
+        3. 引入实际偏差强度 (MAE)
+        """
         weights = {}
         for idx, row in self.df_leagues.iterrows():
-            # P值小于0.05表示显著差异，给予更高权重
-            if row['P值'] < 0.05:
-                weight = 2.0  # 重点关注
-            elif row['P值'] < 0.1:
-                weight = 1.5  # 中等关注
-            else:
-                weight = 1.0  # 一般关注
+            # A. 显著性得分：P值越小，潜力越大。使用 -log10 处理，并限制范围
+            p_val = max(row['P值'], 0.001) # 避免 log(0)
+            significance_score = -np.log10(p_val)
+            p_weight = np.clip(significance_score / 1.3, 1.0, 3.0) # 1.3 是约 0.05 的 log 值
             
-            # 考虑样本量，样本量越大权重越高
-            sample_weight = min(row['样本量'] / 100, 2.0)
-            weights[row['赛事']] = weight * sample_weight
-        
+            # B. 置信度得分：使用根号样本量，100场为基准1.0，400场约等于2.0
+            confidence_weight = np.sqrt(row['样本量'] / 100)
+            confidence_weight = np.clip(confidence_weight, 0.5, 2.5)
+            
+            # C. 偏差强度：计算理论与真实的平均绝对偏差 (MAE)
+            mae = (abs(row['理论概率_胜'] - row['真实频率_胜']) + 
+                   abs(row['理论概率_平'] - row['真实频率_平']) + 
+                   abs(row['理论概率_负'] - row['真实频率_负'])) / 3
+            deviation_bonus = 1 + (mae * 5) # 偏差越大，额外奖励越高
+            
+            # 综合权重
+            weights[row['赛事']] = round(p_weight * confidence_weight * deviation_bonus, 2)
+            
         return weights
     
     def analyze_bonus_cycle(self):
