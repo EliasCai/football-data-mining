@@ -28,8 +28,11 @@ class RX9Optimizer:
         # 1. 计算每场比赛的评分
         match_analysis = []
         for m in matches_14:
-            # 默认使用 '一般' 周期，因为已移除周期研判
             probs = self.pe.calculate_true_probs(m, '一般')
+            
+            # 预处理：获取 胜/平/负 的排序
+            p_map = {'3': probs['3'], '1': probs['1'], '0': probs['0']}
+            sorted_choices = sorted(p_map.items(), key=lambda x: x[1], reverse=True)
             
             match_analysis.append({
                 'id': m.id,
@@ -37,11 +40,57 @@ class RX9Optimizer:
                 'home': m.home_team,
                 'away': m.away_team,
                 'odds': m.odds,
-                'probs': probs, # 包含 safety_score 和 value_score
+                'probs': probs, 
+                'choices': sorted_choices, # [(choice, prob), ...]
                 'match_obj': m,
                 'bet': [],
                 'bet_type': '未定'
             })
+
+        # 1.1 增强步骤：利用 df_leagues 优化风险和价值评分
+        # 引入联赛的统计特性（卡方检验P值、真实频率偏差）来修正单场评分
+        if hasattr(self.ds, 'df_leagues') and not self.ds.df_leagues.empty:
+            for item in match_analysis:
+                league = item['league']
+                # 查找联赛数据
+                league_rows = self.ds.df_leagues[self.ds.df_leagues['赛事'] == league]
+                
+                if not league_rows.empty:
+                    stats = league_rows.iloc[0]
+                    
+                    # --- 优化 Safety Score (基于 P值) ---
+                    # P值越高(>0.05)，说明观察到的频数与理论分布无显著差异，即联赛比较"正路"，符合赔率预期。
+                    # P值越低(<0.05)，说明联赛赛果分布显著偏离理论值，可能存在某种系统性偏差或冷门多。
+                    # 逻辑：P值越高，Safety Score 越高；P值极低，Safety Score 降低。
+                    p_val = stats.get('P值', 0.5)
+                    
+                    # 设定一个调节系数：P值 0.5 为基准
+                    # 如果 P=0.8 -> 1 + (0.3)*0.2 = 1.06 (提升6%)
+                    # 如果 P=0.03 -> 1 + (-0.47)*0.2 = 0.906 (降低9.4%)
+                    safety_factor = 1.0 + (p_val - 0.5) * 0.2
+                    
+                    # 应用修正，但限制幅度在 0.8 ~ 1.2 之间
+                    safety_factor = max(0.8, min(1.2, safety_factor))
+                    item['probs']['safety_score'] *= safety_factor
+                    
+                    # --- 优化 Value Score (基于真实频率偏差) ---
+                    # 计算 平/负 的真实频率与理论概率的偏差
+                    # Bias > 0 表示该结果真实发生频率高于赔率暗示的概率，是被市场低估的选项，具有博取价值。
+                    bias_draw = stats.get('真实频率_平', 0) - stats.get('理论概率_平', 0)
+                    bias_loss = stats.get('真实频率_负', 0) - stats.get('理论概率_负', 0)
+                    
+                    # 基础博冷分
+                    current_value = item['probs']['value_score']
+                    
+                    # 如果平局偏差显著 (>3%)，且当前赔率支持（比如不是极低赔），增加博冷分
+                    if bias_draw > 0.03:
+                        current_value += bias_draw * 0.5 # 偏差越大加分越多
+                        
+                    # 如果客胜偏差显著
+                    if bias_loss > 0.03:
+                        current_value += bias_loss * 0.5
+                        
+                    item['probs']['value_score'] = current_value
             
         # 2. 策略逻辑：基于 safety_score 和 value_score 决定投注
         # 风险系数影响胆码的选择阈值
@@ -70,74 +119,87 @@ class RX9Optimizer:
         
         # 初始化所有比赛为单选（选概率最高的项）
         current_notes = 1
-        
         for match in active_analysis:
-            probs = match['probs']
-            # 找出概率最高的项
-            p_map = {'3': probs['3'], '1': probs['1'], '0': probs['0']}
-            best_choice = max(p_map, key=p_map.get)
-            
-            # 初始状态：每场只选概率最高的
-            match['bet'] = [best_choice]
+            match['bet'] = [match['choices'][0][0]] # 选第1优选
             match['bet_type'] = '单选'
 
         # ---------------------------------------------------------
-        # 优化步骤：平局补全 (Draw Coverage)
+        # 优化步骤 A：冷门预警与稳胆保护 (Trap Detection & Banker Protection)
         # ---------------------------------------------------------
-        
-        # 统计当前选了多少个平局
-        current_draws = sum(1 for m in active_analysis if '1' in m['bet'])
-        min_draws_target = int(target_draw_count) # 向下取整，至少保证这些
-        
-        # 找出尚未选平局的比赛，按平局概率从高到低排序
-        draw_candidates = [m for m in active_analysis if '1' not in m['bet']]
-        draw_candidates.sort(key=lambda x: x['probs']['1'], reverse=True)
-        
-        # 尝试通过升级为双选来补充平局
-        draws_needed = max(0, min_draws_target - current_draws)
-        
-        for i in range(draws_needed):
-            if i < len(draw_candidates):
-                match = draw_candidates[i]
-                
-                # 检查资金
+        # 针对高胜率但有"陷阱"嫌疑的比赛进行强制双选
+        for match in active_analysis:
+            first_choice_prob = match['choices'][0][1]
+            safety_score = match['probs']['safety_score']
+            value_score = match['probs']['value_score']
+            draw_prob = match['probs']['1']
+            
+            # 逻辑：
+            # 1. 如果胜率 > 70% 但安全分 < 0.65 -> 典型的大热必死陷阱（阈值从0.7降至0.65）
+            # 2. 如果博冷分 > 0.2 且 胜率 < 60% -> 存在显著博冷价值
+            # 3. 如果安全分 < 0.5 且 平率 > 12% -> 平局保护逻辑
+            is_trap = (first_choice_prob > 0.7 and safety_score < 0.65)
+            has_high_value = (value_score > 0.2 and first_choice_prob < 0.6)
+            needs_draw_protection = (safety_score < 0.5 and draw_prob > 0.12)
+            
+            if is_trap or has_high_value:
+                if current_notes * 2 <= max_notes:
+                    second_choice = match['choices'][1][0]
+                    if second_choice not in match['bet']:
+                        match['bet'].append(second_choice)
+                        match['bet_type'] = '双选(避险/博冷)'
+                        current_notes *= 2
+            
+            if needs_draw_protection and '1' not in match['bet']:
                 if current_notes * 2 <= max_notes:
                     match['bet'].append('1')
-                    match['bet_type'] = '双选(补平)'
+                    match['bet_type'] = '双选(平局保护)'
                     current_notes *= 2
-                    current_draws += 1
-                else:
-                    break
-        
+
         # ---------------------------------------------------------
-        # 常规升级步骤：基于风险和价值 (Existing Logic)
+        # 优化步骤 B：复合权重升级 (Compound Weight Upgrade)
         # ---------------------------------------------------------
+        current_draws = sum(1 for m in active_analysis if '1' in m['bet'])
+        min_draws_target = int(target_draw_count)
+
+        # 对仍是单选的场次，计算复合升级权重：风险程度 * 价值潜力
+        candidates_to_upgrade = [m for m in active_analysis if len(m['bet']) == 1]
         
-        # 重新排序，按“不稳程度”即 safety_score 升序（越不安全越需要防）
-        candidates_to_upgrade = [m for m in active_analysis if len(m['bet']) < 2]
-        candidates_to_upgrade.sort(key=lambda x: x['probs']['safety_score'])
+        def calc_upgrade_weight(m):
+            # 风险(1-安全分)占比 40%，博冷价值占比 60%
+            risk_factor = (1 - m['probs']['safety_score'])
+            value_factor = m['probs']['value_score']
+            # 如果是平局候选，根据目标平局数给予额外权重 (1.5倍以强化平局覆盖)
+            draw_weight = 1.5 if (m['choices'][1][0] == '1' and current_draws < min_draws_target) else 1.0
+            return (risk_factor * 0.4 + value_factor * 0.6) * draw_weight
+
+        candidates_to_upgrade.sort(key=calc_upgrade_weight, reverse=True)
         
         for match in candidates_to_upgrade:
-            # 当前已选
-            current_choice = match['bet'][0]
-            probs = match['probs']
-            
-            # 寻找第二好的选项
-            p_map = {'3': probs['3'], '1': probs['1'], '0': probs['0']}
-            del p_map[current_choice]
-            second_choice = max(p_map, key=p_map.get)
-            
-            # 试探性升级为双选
             if current_notes * 2 <= max_notes:
+                second_choice = match['choices'][1][0]
                 match['bet'].append(second_choice)
-                match['bet_type'] = '双选'
+                match['bet_type'] = '双选(复合优化)'
                 current_notes *= 2
+                if second_choice == '1': current_draws += 1
             else:
-                break # 资金耗尽
+                break
 
+        # ---------------------------------------------------------
+        # 优化步骤 D：全包逻辑 (Triple Bet / All-in)
+        # ---------------------------------------------------------
+        # 如果还有较多资金，将最不稳的双选升级为全包
+        candidates_to_triple = [m for m in active_analysis if len(m['bet']) == 2]
+        candidates_to_triple.sort(key=lambda x: x['probs']['safety_score']) # 最不安全的优先
         
-        # 如果还有资金，尝试升级为全包？ (双选 -> 全包 需要 * 1.5 倍注数，即 2->3)
-        # 这里简化，只做到双选。若需全包逻辑类似。
+        for match in candidates_to_triple:
+            # 双选(2注)变全包(3注)，注数增加 1.5倍
+            if current_notes * 1.5 <= max_notes:
+                third_choice = match['choices'][2][0]
+                match['bet'].append(third_choice)
+                match['bet_type'] = '全包'
+                current_notes = int(current_notes * 1.5)
+            else:
+                break
         
         # 3. 整理输出
         results_data = []
@@ -211,27 +273,38 @@ def run_system(current_odds_data, max_cost=128, risk_tolerance=0.5):
 if __name__ == "__main__":
     print("=== Strategy Generator 模块测试 ===")
     
-    # 模拟输入数据
-    mock_matches = [
-        MatchInfo(1, '英超', '曼城', '伯恩利', [1.12, 6.5, 15.0]),
-        MatchInfo(2, '非洲杯', '尼日利亚', '赤道几内亚', [1.80, 3.2, 4.5]),
-        MatchInfo(3, '法乙', '波尔多', '亚眠', [2.10, 3.0, 3.6]),
-        MatchInfo(4, '英超', '阿森纳', '切尔西', [2.5, 3.2, 2.8]),
-        MatchInfo(5, '西甲', '皇马', '巴萨', [2.2, 3.4, 3.1]),
-        MatchInfo(6, '意甲', '尤文', '米兰', [2.0, 3.1, 3.8]),
-        MatchInfo(7, '德甲', '拜仁', '多特', [1.6, 4.0, 5.0]),
-        MatchInfo(8, '英超', '利物浦', '曼联', [1.9, 3.5, 3.8]),
-        MatchInfo(9, '法甲', '巴黎', '马赛', [1.4, 4.5, 7.0]),
-        MatchInfo(10, '英冠', '莱斯特城', '伊普斯维奇', [2.1, 3.3, 3.4]),
-        MatchInfo(11, '英冠', '南安普顿', '利兹联', [2.6, 3.2, 2.6]),
-        MatchInfo(12, '荷甲', '埃因霍温', '费耶诺德', [1.8, 3.6, 4.0]),
-        MatchInfo(13, '葡超', '本菲卡', '波尔图', [2.3, 3.1, 3.0]),
-        MatchInfo(14, '亚冠', '利雅得胜利', '利雅得新月', [2.4, 3.4, 2.7])
-    ]
-    
-    # 测试不同参数
-    print("\n>>> 测试场景 1: 低成本保守型 (上限 32元)")
-    run_system(mock_matches, max_cost=32, risk_tolerance=0.2)
-    
-    print("\n>>> 测试场景 2: 中等成本平衡型 (上限 128元)")
-    run_system(mock_matches, max_cost=128, risk_tolerance=0.5)
+    # 使用 DataSource 中的真实数据
+    ds = DataSource()
+    if hasattr(ds, 'df_matches') and not ds.df_matches.empty:
+        # 选取期数id为 25193 的比赛 (前14场)
+        period_id = 25193
+        df_period = ds.df_matches[ds.df_matches['期数id'] == period_id].reset_index(drop=True)
+        
+        if df_period.empty:
+            print(f"Error: 未找到期号 {period_id} 的比赛数据")
+        else:
+            print(f">>> 加载真实历史数据: 期号 {period_id}, 共 {len(df_period)} 场")
+            
+            real_matches = []
+            for idx, row in df_period.iterrows():
+                # 构建 MatchInfo 对象
+                # 注意：MatchInfo 需要 odds = [胜, 平, 负]
+                odds = [float(row['主胜SP值']), float(row['主平SP值']), float(row['主负SP值'])]
+                
+                real_matches.append(MatchInfo(
+                    id=idx + 1, # ID 从 1 开始
+                    league=row['赛事'],
+                    home_team=row['主队'],
+                    away_team=row['客队'],
+                    odds=odds
+                ))
+            
+            # 测试不同参数
+            print(f"\n>>> 测试场景 1: 低成本保守型 (上限 32元) - 期号 {period_id}")
+            run_system(real_matches, max_cost=32, risk_tolerance=0.2)
+            
+            print(f"\n>>> 测试场景 2: 中等成本平衡型 (上限 128元) - 期号 {period_id}")
+            run_system(real_matches, max_cost=128, risk_tolerance=0.5)
+            
+    else:
+        print("Error: DataSource 中未找到 df_matches 数据，请检查 data.py")
