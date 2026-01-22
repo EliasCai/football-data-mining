@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from dataclasses import dataclass
 from typing import List, Dict
-from datasource import DataSource
+from data import DataSource
 
 @dataclass
 class MatchInfo:
@@ -52,8 +52,12 @@ class ProbabilityEngine:
             1 / (1 + stats['Std_最终概率_负'])
         ])
         
+        # 3. 周期修正
+        cycle_weights = self.ds.get_cycle_correction(cycle_state)
+        weight_vec = np.array([cycle_weights['胜'], cycle_weights['平'], cycle_weights['负']])
+
         # 逐项相乘进行调整
-        final_probs = base_probs * volatility_penalty
+        final_probs = base_probs * weight_vec * volatility_penalty
         
         # 再次归一化
         final_probs = final_probs / final_probs.sum() 
