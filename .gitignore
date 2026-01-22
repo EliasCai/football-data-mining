@@ -1,1 +1,2 @@
 source/__pycache__/datasource.cpython-312.pyc
+source/__pycache__/*.pyc

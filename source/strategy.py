@@ -1,38 +1,9 @@
 import pandas as pd
 import numpy as np
-from typing import List, Dict
+from typing import List, Dict, Tuple
 from data import DataSource
 from engine import ProbabilityEngine, MatchInfo
-
-# ==========================================
-# 3. 周期研判系统 (Cycle Detector)
-# ==========================================
-
-class CycleAnalyzer:
-    """
-    分析 df_bonus，判断当前处于什么周期
-    """
-    def __init__(self, data_source: DataSource):
-        self.history = data_source.df_bonus
-        
-    def predict_current_state(self):
-        """
-        逻辑：
-        1. 获取最近3期的奖金。
-        2. 如果连续低奖金（火锅），预测下期为“反弹/比较冷”。
-        3. 如果上期是超级大奖，预测下期回归“一般”。
-        """
-        last_3_prizes = self.history['一等奖'].tail(3).values
-        
-        # 规则1：火锅不过三 (用户提供的核心规律)
-        if all(p < 1000 for p in last_3_prizes):
-            return "比较冷", 1.5 # 状态，资金系数(加注)
-        
-        # 规则2：均值回归
-        if last_3_prizes[-1] > 50000:
-            return "一般", 0.8 # 上期太冷，下期防热，减注
-            
-        return "一般", 1.0 # 默认状态
+import itertools
 
 # ==========================================
 # 4. 策略生成器 (Strategy Generator)
@@ -43,86 +14,184 @@ class RX9Optimizer:
         self.ds = data_source
         self.pe = prob_engine
 
-    def generate_ticket(self, matches_14: List[MatchInfo], current_state: str):
+    def generate_ticket(self, matches_14: List[MatchInfo], max_cost: int = 128, risk_tolerance: float = 0.5):
         """
         生成最佳任选9方案
+        :param matches_14: 14场比赛信息
+        :param max_cost: 仓位成本上限（元），每注2元
+        :param risk_tolerance: 风险系数 (0-1)，0为极度保守，1为极度激进
         """
+        # 0. 获取目标赛果分布 (Draw Target)
+        target_stats = self.ds.get_target_frequency('一般')
+        target_draw_count = target_stats['平'] # e.g. 3.14
+        
         # 1. 计算每场比赛的评分
         match_analysis = []
         for m in matches_14:
-            probs = self.pe.calculate_true_probs(m, current_state)
-            
-            # 安全分 (用于定胆)：胜率 * (1 - 联赛波动性)
-            # 注意：engine.py 返回的 probs 中 key 是 '3', '1', '0'
-            # volatility_index 也在 probs 中
-            safety_score = probs['3'] * (1 - probs['volatility_index'])
-            
-            # 博冷分 (用于双选)：(平率 + 负率) * 联赛波动性
-            value_score = (probs['1'] + probs['0']) * probs['volatility_index']
+            # 默认使用 '一般' 周期，因为已移除周期研判
+            probs = self.pe.calculate_true_probs(m, '一般')
             
             match_analysis.append({
                 'id': m.id,
                 'league': m.league,
-                'probs': probs,
-                'safety_score': safety_score,
-                'value_score': value_score,
-                'match_obj': m
+                'home': m.home_team,
+                'away': m.away_team,
+                'odds': m.odds,
+                'probs': probs, # 包含 safety_score 和 value_score
+                'match_obj': m,
+                'bet': [],
+                'bet_type': '未定'
             })
             
-        # 2. 选胆逻辑 (Banker Selection)
-        # 按安全分排序，选前N个
-        # 约束：如果处于"比较冷"周期，不仅看安全分，还要看该联赛的历史"胜"频次
-        match_analysis.sort(key=lambda x: x['safety_score'], reverse=True)
+        # 2. 策略逻辑：基于 safety_score 和 value_score 决定投注
+        # 风险系数影响胆码的选择阈值
         
-        # 动态调整胆码数量：一般周期3胆，冷周期2胆
-        num_bankers = 3 if current_state == '一般' else 2
-        bankers = match_analysis[:num_bankers]
+        # 将比赛按 safety_score 排序
+        match_analysis.sort(key=lambda x: x['probs']['safety_score'], reverse=True)
         
-        # 3. 选拖逻辑 (Punter Selection)
-        # 剩下的比赛中，按 博冷分 排序，选出最值得防冷的场次
-        remaining = match_analysis[num_bankers:]
-        remaining.sort(key=lambda x: x['value_score'], reverse=True)
+        max_notes = max_cost // 2 # 最大注数
         
-        # 选取高价值的场次进行双选/全包覆盖
-        # 这里简化演示：选取博冷分最高的6-7场，构建复式
+        # 初始化所有比赛为单选（选概率最高的项）
+        current_notes = 1
         
-        candidates = remaining[:10] # 选取候选池
+        for match in match_analysis:
+            probs = match['probs']
+            # 找出概率最高的项
+            p_map = {'3': probs['3'], '1': probs['1'], '0': probs['0']}
+            best_choice = max(p_map, key=p_map.get)
+            
+            # 初始状态：每场只选概率最高的
+            match['bet'] = [best_choice]
+            match['bet_type'] = '单选'
+
+        # ---------------------------------------------------------
+        # 优化步骤：平局补全 (Draw Coverage)
+        # 历史数据显示14场通常有3-4场平局。如果当前单选方案中平局过少，
+        # 我们需要强制在平局概率较高的场次进行防守（双选平局）
+        # ---------------------------------------------------------
         
-        # 输出结构
+        # 统计当前选了多少个平局
+        current_draws = sum(1 for m in match_analysis if '1' in m['bet'])
+        min_draws_target = int(target_draw_count) # 向下取整，至少保证这些
+        
+        # 找出尚未选平局的比赛，按平局概率从高到低排序
+        draw_candidates = [m for m in match_analysis if '1' not in m['bet']]
+        draw_candidates.sort(key=lambda x: x['probs']['1'], reverse=True)
+        
+        # 尝试通过升级为双选来补充平局
+        # 注意：这里我们优先补全平局，消耗一部分资金
+        draws_needed = max(0, min_draws_target - current_draws)
+        
+        # 限制：不要为了补平局把所有资金耗光，保留一部分给"高风险/高价值"升级
+        # 设定一个平局补全的预算比例，例如 50% 的剩余空间，或者简单地只补 2-3 个最可能的
+        
+        for i in range(draws_needed):
+            if i < len(draw_candidates):
+                match = draw_candidates[i]
+                
+                # 检查资金
+                if current_notes * 2 <= max_notes:
+                    match['bet'].append('1')
+                    match['bet_type'] = '双选(补平)'
+                    current_notes *= 2
+                    current_draws += 1
+                else:
+                    break
+        
+        # ---------------------------------------------------------
+        # 常规升级步骤：基于风险和价值 (Existing Logic)
+        # ---------------------------------------------------------
+        
+        # 重新排序，按“不稳程度”即 safety_score 升序（越不安全越需要防）
+        # 排除掉已经是双选的比赛（或者允许三选？这里暂只支持双选）
+        candidates_to_upgrade = [m for m in match_analysis if len(m['bet']) < 2]
+        candidates_to_upgrade.sort(key=lambda x: x['probs']['safety_score'])
+        
+        for match in candidates_to_upgrade:
+            # 当前已选
+            current_choice = match['bet'][0]
+            probs = match['probs']
+            
+            # 寻找第二好的选项
+            p_map = {'3': probs['3'], '1': probs['1'], '0': probs['0']}
+            del p_map[current_choice]
+            second_choice = max(p_map, key=p_map.get)
+            
+            # 试探性升级为双选
+            if current_notes * 2 <= max_notes:
+                match['bet'].append(second_choice)
+                match['bet_type'] = '双选'
+                current_notes *= 2
+            else:
+                break # 资金耗尽
+
+        
+        # 如果还有资金，尝试升级为全包？ (双选 -> 全包 需要 * 1.5 倍注数，即 2->3)
+        # 这里简化，只做到双选。若需全包逻辑类似。
+        
+        # 3. 整理输出
+        results_data = []
+        for m in matches_14:
+            # 找到对应的分析结果
+            analysis = next(item for item in match_analysis if item['id'] == m.id)
+            
+            bet_str = "".join(sorted(analysis['bet'], reverse=True)) # 如 "31"
+            
+            results_data.append({
+                '场次': m.id,
+                '赛事': m.league,
+                '主队': m.home_team,
+                '客队': m.away_team,
+                '欧赔': str(m.odds),
+                '胜率': f"{analysis['probs']['3']:.2%}",
+                '平率': f"{analysis['probs']['1']:.2%}",
+                '负率': f"{analysis['probs']['0']:.2%}",
+                '安全分': f"{analysis['probs']['safety_score']:.2f}",
+                '博冷分': f"{analysis['probs']['value_score']:.2f}",
+                '推荐': bet_str,
+                '类型': analysis['bet_type']
+            })
+            
+        df_results = pd.DataFrame(results_data)
+        
         return {
-            'strategy_name': f"周期:{current_state} - 智能胆拖",
-            'bankers': [b['match_obj'].home_team for b in bankers],
-            'focus_matches': [c['match_obj'].home_team for c in candidates],
-            'note': "建议对候选场次采用双选(31或10)，重点防范高波动联赛的平局"
+            'df': df_results,
+            'total_notes': current_notes,
+            'total_cost': current_notes * 2
         }
 
 # ==========================================
 # 5. 主程序入口 (Main Execution)
 # ==========================================
 
-def run_system(current_odds_data):
+def run_system(current_odds_data, max_cost=128, risk_tolerance=0.5):
     # 初始化
     ds = DataSource()
     pe = ProbabilityEngine(ds)
-    cycle_analyzer = CycleAnalyzer(ds)
+    # 移除 CycleAnalyzer
     optimizer = RX9Optimizer(ds, pe)
     
-    # 1. 研判周期
-    state, fund_multiplier = cycle_analyzer.predict_current_state()
-    print(f"当前系统研判状态: 【{state}】")
-    print(f"建议资金系数: {fund_multiplier}倍")
+    print(f"=== RX9-Alpha 策略生成 ===")
+    print(f"参数设置: 成本上限 {max_cost}元, 风险系数 {risk_tolerance}")
     
-    # 2. 读取目标期望 (基于 df_outcome_freq)
-    target_freq = ds.df_outcome_freq.loc[state]
-    print(f"本期目标模型分布 -> 胜:{target_freq['胜']:.1f}场, 平:{target_freq['平']:.1f}场, 负:{target_freq['负']:.1f}场")
+    # 生成策略
+    result = optimizer.generate_ticket(current_odds_data, max_cost, risk_tolerance)
     
-    # 3. 生成策略
-    ticket = optimizer.generate_ticket(current_odds_data, state)
+    df = result['df']
+    print("\n[推荐方案详情]")
+    # 设置 pandas 显示参数
+    pd.set_option('display.max_columns', None)
+    pd.set_option('display.width', 1000)
+    pd.set_option('display.colheader_justify', 'center')
+    pd.set_option('display.unicode.ambiguous_as_wide', True)
+    pd.set_option('display.unicode.east_asian_width', True)
+
+    print(df)
     
-    print("\n--- 推荐方案 ---")
-    print(f"稳胆场次: {ticket['bankers']}")
-    print(f"重点博冷场次: {ticket['focus_matches']}")
-    print(ticket['note'])
+    print("\n" + "="*40)
+    print(f"总注数: {result['total_notes']} 注")
+    print(f"总成本: {result['total_cost']} 元")
+    print("="*40)
 
 if __name__ == "__main__":
     print("=== Strategy Generator 模块测试 ===")
@@ -145,4 +214,9 @@ if __name__ == "__main__":
         MatchInfo(14, '亚冠', '利雅得胜利', '利雅得新月', [2.4, 3.4, 2.7])
     ]
     
-    run_system(mock_matches)
+    # 测试不同参数
+    print("\n>>> 测试场景 1: 低成本保守型 (上限 32元)")
+    run_system(mock_matches, max_cost=32, risk_tolerance=0.2)
+    
+    print("\n>>> 测试场景 2: 中等成本平衡型 (上限 128元)")
+    run_system(mock_matches, max_cost=128, risk_tolerance=0.5)
