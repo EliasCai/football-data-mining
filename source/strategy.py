@@ -49,12 +49,29 @@ class RX9Optimizer:
         # 将比赛按 safety_score 排序
         match_analysis.sort(key=lambda x: x['probs']['safety_score'], reverse=True)
         
+        # =========================================================
+        # 任选9核心规则：仅选择9场比赛进行投注
+        # =========================================================
+        # 策略：选取 Safety Score 最高的9场比赛作为基础
+        # 未入选的5场比赛将被标记为 "避战" (Skipped)
+        
+        selected_matches = match_analysis[:9]
+        skipped_matches = match_analysis[9:]
+        
+        # 标记未选场次
+        for m in skipped_matches:
+            m['bet'] = []
+            m['bet_type'] = '避战'
+            
+        # 仅对入选的9场比赛进行后续的资金分配和优化
+        active_analysis = selected_matches
+        
         max_notes = max_cost // 2 # 最大注数
         
         # 初始化所有比赛为单选（选概率最高的项）
         current_notes = 1
         
-        for match in match_analysis:
+        for match in active_analysis:
             probs = match['probs']
             # 找出概率最高的项
             p_map = {'3': probs['3'], '1': probs['1'], '0': probs['0']}
@@ -66,24 +83,18 @@ class RX9Optimizer:
 
         # ---------------------------------------------------------
         # 优化步骤：平局补全 (Draw Coverage)
-        # 历史数据显示14场通常有3-4场平局。如果当前单选方案中平局过少，
-        # 我们需要强制在平局概率较高的场次进行防守（双选平局）
         # ---------------------------------------------------------
         
         # 统计当前选了多少个平局
-        current_draws = sum(1 for m in match_analysis if '1' in m['bet'])
+        current_draws = sum(1 for m in active_analysis if '1' in m['bet'])
         min_draws_target = int(target_draw_count) # 向下取整，至少保证这些
         
         # 找出尚未选平局的比赛，按平局概率从高到低排序
-        draw_candidates = [m for m in match_analysis if '1' not in m['bet']]
+        draw_candidates = [m for m in active_analysis if '1' not in m['bet']]
         draw_candidates.sort(key=lambda x: x['probs']['1'], reverse=True)
         
         # 尝试通过升级为双选来补充平局
-        # 注意：这里我们优先补全平局，消耗一部分资金
         draws_needed = max(0, min_draws_target - current_draws)
-        
-        # 限制：不要为了补平局把所有资金耗光，保留一部分给"高风险/高价值"升级
-        # 设定一个平局补全的预算比例，例如 50% 的剩余空间，或者简单地只补 2-3 个最可能的
         
         for i in range(draws_needed):
             if i < len(draw_candidates):
@@ -103,8 +114,7 @@ class RX9Optimizer:
         # ---------------------------------------------------------
         
         # 重新排序，按“不稳程度”即 safety_score 升序（越不安全越需要防）
-        # 排除掉已经是双选的比赛（或者允许三选？这里暂只支持双选）
-        candidates_to_upgrade = [m for m in match_analysis if len(m['bet']) < 2]
+        candidates_to_upgrade = [m for m in active_analysis if len(m['bet']) < 2]
         candidates_to_upgrade.sort(key=lambda x: x['probs']['safety_score'])
         
         for match in candidates_to_upgrade:
@@ -131,18 +141,22 @@ class RX9Optimizer:
         
         # 3. 整理输出
         results_data = []
-        for m in matches_14:
-            # 找到对应的分析结果
-            analysis = next(item for item in match_analysis if item['id'] == m.id)
-            
+        
+        # 我们希望按原始顺序输出，但只显示选中的9场，或者显示全部但标记状态
+        # 用户需求是"输出方案"，通常只关心要买哪几场。
+        # 这里只输出选中的9场，并按ID排序方便查找
+        
+        selected_matches.sort(key=lambda x: x['id'])
+        
+        for analysis in selected_matches:
             bet_str = "".join(sorted(analysis['bet'], reverse=True)) # 如 "31"
             
             results_data.append({
-                '场次': m.id,
-                '赛事': m.league,
-                '主队': m.home_team,
-                '客队': m.away_team,
-                '欧赔': str(m.odds),
+                '场次': analysis['id'],
+                '赛事': analysis['league'],
+                '主队': analysis['home'],
+                '客队': analysis['away'],
+                '欧赔': str(analysis['odds']),
                 '胜率': f"{analysis['probs']['3']:.2%}",
                 '平率': f"{analysis['probs']['1']:.2%}",
                 '负率': f"{analysis['probs']['0']:.2%}",
@@ -153,6 +167,7 @@ class RX9Optimizer:
             })
             
         df_results = pd.DataFrame(results_data)
+
         
         return {
             'df': df_results,
