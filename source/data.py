@@ -118,6 +118,7 @@ def main():
     if hasattr(ds, 'df_matches'):
         print(ds.df_matches[['期数id', '赛事', '主队', '客队', '比赛结果']].head(3))
         print(f"Shape: {ds.df_matches.shape}")
+        # print(ds.df_matches['期数id'].sort_values().unique())
     else:
         print("未找到 df_matches")
 

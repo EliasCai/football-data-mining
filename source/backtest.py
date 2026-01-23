@@ -20,6 +20,7 @@ class Ren9Backtest:
         self.period_results = []
         self.match_details = {} # 新增：存储每期的详细比赛结果 {period_id: [details]}
         self.best_params = None # 新增：存储最佳参数组合
+        self.current_params = {} # 新增：存储当前运行参数
         
     def _get_match_result_code(self, result: str) -> str:
         """
@@ -116,6 +117,73 @@ class Ren9Backtest:
         
         return results
     
+    def _generate_all_matches_details(self, all_matches: List[MatchInfo], selected_matches: List[Dict], 
+                                     actual_results: Dict[int, str], all_matches_data: List[Dict] = None) -> List[Dict]:
+        """
+        生成完整的14场比赛详情（包含未投注的比赛）
+        :param all_matches: 所有14场比赛
+        :param selected_matches: 被选中的9场比赛
+        :param actual_results: 实际结果
+        :return: 完整的14场比赛详情列表
+        """
+        # 创建选中比赛的映射，方便快速查找
+        selected_map = {match['id']: match for match in selected_matches}
+        
+        # 创建所有比赛数据的映射，方便快速查找
+        all_matches_map = {}
+        if all_matches_data:
+            all_matches_map = {match['id']: match for match in all_matches_data}
+        
+        all_details = []
+        for match in all_matches:
+            match_id = match.id
+            
+            if match_id in selected_map:
+                # 这是被选中的比赛，使用原有的详细信息
+                selected_match = selected_map[match_id]
+                actual_result = actual_results.get(match_id, '')
+                is_hit = self._check_bet_hit(selected_match['bet'], actual_result)
+                
+                all_details.append({
+                    'id': match_id,
+                    'teams': f"{match.home_team} vs {match.away_team}",
+                    'bet': "".join(selected_match['bet']),
+                    'actual': actual_result,
+                    'is_hit': is_hit,
+                    'win_rate': selected_match['win_rate'],
+                    'draw_rate': selected_match['draw_rate'],
+                    'loss_rate': selected_match['loss_rate'],
+                    'safety_score': selected_match['safety_score'],
+                    'value_score': selected_match['value_score'],
+                    'is_selected': True,
+                    'bet_type': selected_match['bet_type']
+                })
+            else:
+                # 这是未选中的比赛，标记为"未投注"
+                actual_result = actual_results.get(match_id, '')
+                
+                # 从all_matches_data获取统计信息
+                match_data = all_matches_map.get(match_id, {})
+                
+                all_details.append({
+                    'id': match_id,
+                    'teams': f"{match.home_team} vs {match.away_team}",
+                    'bet': "未投注",
+                    'actual': actual_result,
+                    'is_hit': False,  # 未投注的比赛不算命中
+                    'win_rate': match_data.get('win_rate', 'N/A'),
+                    'draw_rate': match_data.get('draw_rate', 'N/A'),
+                    'loss_rate': match_data.get('loss_rate', 'N/A'),
+                    'safety_score': match_data.get('safety_score', 'N/A'),
+                    'value_score': match_data.get('value_score', 'N/A'),
+                    'is_selected': False,
+                    'bet_type': '未投注'
+                })
+        
+        # 按场次ID排序
+        all_details.sort(key=lambda x: x['id'])
+        return all_details
+    
     def run_backtest(self, period_ids: List[int], max_cost: int = 128, 
                      risk_tolerance: float = 0.5) -> pd.DataFrame:
         """
@@ -126,6 +194,7 @@ class Ren9Backtest:
         :return: 回测结果DataFrame
         """
         self.period_results = []
+        self.current_params = {'max_cost': max_cost, 'risk_tolerance': risk_tolerance}
         
         for period_id in period_ids:
             matches = self._prepare_matches_for_period(period_id)
@@ -161,7 +230,11 @@ class Ren9Backtest:
                     })
             
             payout, is_winner, details = self._calculate_period_payout(period_id, selected_matches, actual_results)
-            self.match_details[period_id] = details
+            
+            # 生成完整的14场比赛详情（包含未投注的比赛）
+            all_matches_data = bet_result.get('all_matches', [])
+            all_matches_details = self._generate_all_matches_details(matches, selected_matches, actual_results, all_matches_data)
+            self.match_details[period_id] = all_matches_details
             
             cost = bet_result['total_cost']
             
@@ -316,12 +389,97 @@ class Ren9Backtest:
             
         print("=" * 50)
 
+    def save_report_to_file(self, filename: str = "backtest_report.md"):
+        """
+        将回测报告保存到Markdown文件
+        """
+        report = self.generate_report()
+        
+        with open(filename, 'w', encoding='utf-8') as f:
+            f.write("# 任选9 回测深度分析报告\n\n")
+            
+            f.write("## 一、 核心指标汇总\n")
+            f.write("| 指标名称 | 数值 |\n")
+            f.write("| :--- | :--- |\n")
+            f.write(f"| 总投注期数 | {report['总投注期数']} |\n")
+            f.write(f"| 中奖期数 | {report['中奖期数']} |\n")
+            f.write(f"| 命中率 | {report['命中率']:.2%} |\n")
+            f.write(f"| 累计投入 | {report['累计投入']:.2f} 元 |\n")
+            f.write(f"| 累计奖金 | {report['累计奖金']:.2f} 元 |\n")
+            f.write(f"| 累计净收益 | {report['累计净收益']:.2f} 元 |\n")
+            f.write(f"| ROI | {report['ROI']:.2%} |\n")
+            f.write(f"| 最大回撤 | {report['最大回撤']:.2%} |\n")
+            f.write(f"| 夏普比率 | {report['夏普比率']:.4f} |\n")
+            f.write(f"| 周期捕获率 | {report['周期捕获率']:.2%} |\n\n")
+            
+            if self.best_params:
+                f.write("## 二、 最优参数推荐\n")
+                f.write("> 基于本次网格搜索生成的最佳配置\n\n")
+                f.write(f"- **最佳成本上限**: {self.best_params['max_cost']} 元\n")
+                f.write(f"- **最佳风险系数**: {self.best_params['risk_tolerance']}\n")
+                f.write(f"- **最高场次准确率**: {self.best_params['match_accuracy']:.2%}\n")
+                f.write(f"- **预计ROI**: {self.best_params['roi']:.2%}\n\n")
+
+            if self.current_params:
+                f.write("## 三、 当前运行参数\n")
+                f.write(f"- **成本上限**: {self.current_params.get('max_cost')} 元\n")
+                f.write(f"- **风险系数**: {self.current_params.get('risk_tolerance')}\n\n")
+
+            f.write("## 四、 各期详细对账单\n")
+            for period_id, details in self.match_details.items():
+                period_matches = self.results[self.results['期数id'] == period_id]
+                if period_matches.empty: continue
+                info = period_matches.iloc[0]
+                
+                f.write(f"### 期数: {period_id}\n")
+                f.write(f"- **结果**: {'🏆 中奖' if info['是否中奖'] else '💀 未中'}\n")
+                f.write(f"- **盈亏**: 投入 {info['投注成本']:.2f} | 奖金 {info['奖金']:.2f} | 净收益 {info['净收益']:.2f}\n\n")
+                
+                f.write("| 场次 | 对阵 | 投注 | 结果 | 状态 | 胜率 | 平率 | 负率 | 安全分 | 博冷分 |\n")
+                f.write("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n")
+                
+                selected_hits = 0
+                selected_count = 0
+                for d in details:
+                    if d['is_selected']:
+                        selected_count += 1
+                        status = "✅命中" if d['is_hit'] else "❌错"
+                        if d['is_hit']: selected_hits += 1
+                    else:
+                        status = "未投注"
+                    
+                    # 格式化输出，处理N/A值
+                    win_rate = d['win_rate'] if d['win_rate'] != 'N/A' else 'N/A'
+                    draw_rate = d['draw_rate'] if d['draw_rate'] != 'N/A' else 'N/A'
+                    loss_rate = d['loss_rate'] if d['loss_rate'] != 'N/A' else 'N/A'
+                    safety_score = d['safety_score'] if d['safety_score'] != 'N/A' else 'N/A'
+                    value_score = d['value_score'] if d['value_score'] != 'N/A' else 'N/A'
+                    
+                    f.write(f"| {d['id']} | {d['teams']} | {d['bet']} | {d['actual']} | {status} | {win_rate} | {draw_rate} | {loss_rate} | {safety_score} | {value_score} |\n")
+                
+                accuracy = selected_hits / selected_count if selected_count > 0 else 0
+                f.write(f"\n**单期统计**: 选中场数 {selected_count}/9 | 命中场数 {selected_hits}/9 | 选中准确率: {accuracy:.2%}\n\n")
+                f.write("---\n\n")
+                
+        print(f"\n[系统] 报告已保存至: {filename}")
+
+    def save_results_to_csv(self, filename: str = "backtest_results.csv"):
+        """
+        将期数结果保存到CSV文件
+        """
+        if not self.results.empty:
+            self.results.to_csv(filename, index=False, encoding='utf-8-sig')
+            print(f"[系统] 原始数据已导出至: {filename}")
+
+
     def print_detailed_period_reports(self):
         """
-        打印每一期的详细报告
+        打印每一期的详细报告（显示全部14场比赛）
         """
         print("\n" + "=" * 100)
         print("【任选9 各期详细投注对账单 & 预测深度分析】")
+        if self.current_params:
+            print(f"当前回测参数: 成本上限={self.current_params.get('max_cost')} | 风险系数={self.current_params.get('risk_tolerance')}")
         print("=" * 100)
         
         for period_id, details in self.match_details.items():
@@ -333,20 +491,32 @@ class Ren9Backtest:
             
             print(f"\n>>> 期数ID: {period_id}")
             print("-" * 100)
-            header = f"{'场次':<4} {'对阵信息':<22} {'投注':<6} {'结果':<4} {'状态':<6} {'胜率':<8} {'平率':<8} {'负率':<8} {'安全分':<8} {'博冷分':<8}"
+            header = f"{'场次':<4} {'对阵信息':<22} {'投注':<8} {'结果':<4} {'状态':<8} {'胜率':<8} {'平率':<8} {'负率':<8} {'安全分':<8} {'博冷分':<8}"
             print(header)
             
-            hits = 0
+            selected_hits = 0
+            selected_count = 0
             for d in details:
-                status = "✅命中" if d['is_hit'] else "❌错"
-                if d['is_hit']: hits += 1
+                if d['is_selected']:
+                    selected_count += 1
+                    status = "✅命中" if d['is_hit'] else "❌错"
+                    if d['is_hit']: selected_hits += 1
+                else:
+                    status = "未投注"
                 
-                line = f"{d['id']:<4} {d['teams']:<22} {d['bet']:<6} {d['actual']:<4} {status:<6} {d['win_rate']:<8} {d['draw_rate']:<8} {d['loss_rate']:<8} {d['safety_score']:<8} {d['value_score']:<8}"
+                # 格式化输出，处理N/A值
+                win_rate = d['win_rate'] if d['win_rate'] != 'N/A' else 'N/A'
+                draw_rate = d['draw_rate'] if d['draw_rate'] != 'N/A' else 'N/A'
+                loss_rate = d['loss_rate'] if d['loss_rate'] != 'N/A' else 'N/A'
+                safety_score = d['safety_score'] if d['safety_score'] != 'N/A' else 'N/A'
+                value_score = d['value_score'] if d['value_score'] != 'N/A' else 'N/A'
+                
+                line = f"{d['id']:<4} {d['teams']:<22} {d['bet']:<8} {d['actual']:<4} {status:<8} {win_rate:<8} {draw_rate:<8} {loss_rate:<8} {safety_score:<8} {value_score:<8}"
                 print(line)
             
-            accuracy = hits / len(details) if details else 0
+            accuracy = selected_hits / selected_count if selected_count > 0 else 0
             print("-" * 100)
-            print(f"单期统计: 命中场数 {hits}/9 | 准确率: {accuracy:.2%}")
+            print(f"单期统计: 选中场数 {selected_count}/9 | 命中场数 {selected_hits}/9 | 选中准确率: {accuracy:.2%}")
             print(f"资金情况: 投入 {period_info['投注成本']:.2f} | 奖金 {period_info['奖金']:.2f} | 净收益 {period_info['净收益']:.2f}")
             if '当期一等奖' in period_info:
                 print(f"预期奖金: {period_info['当期一等奖']:.2f} (当期实际一等奖金)")
@@ -365,7 +535,7 @@ class Ren9Backtest:
         print("【自适应参数网格搜索中...】")
         print("=" * 50)
         
-        best_accuracy = -1.0
+        best_roi = -float('inf')
         best_params = {}
         all_search_results = []
 
@@ -405,26 +575,26 @@ class Ren9Backtest:
                 # 打印进度
                 print(f"测试: cost={cost:<4} risk={risk:.2f} | 准确率: {avg_accuracy:.2%} | 投注: {total_notes:>4}注 | 中奖: {winning_periods}/{total_periods} | 奖金: {total_payout:>8.2f} | ROI: {roi:.2%}")
                 
-                # 寻找最优：优先准确率，准确率相同时优先ROI，再相同时优先低成本
+                # 寻找最优：优先ROI，ROI相同时优先准确率，再相同时优先低成本
                 is_better = False
-                if avg_accuracy > best_accuracy:
+                if roi > best_roi:
                     is_better = True
-                elif abs(avg_accuracy - best_accuracy) < 1e-6:
-                    if roi > best_params.get('roi', -np.inf):
+                elif abs(roi - best_roi) < 1e-6:
+                    if avg_accuracy > best_params.get('match_accuracy', -1.0):
                         is_better = True
-                    elif abs(roi - best_params.get('roi', 0)) < 1e-6:
-                        if cost < best_params.get('max_cost', np.inf):
+                    elif abs(avg_accuracy - best_params.get('match_accuracy', -1.0)) < 1e-6:
+                        if cost < best_params.get('max_cost', float('inf')):
                             is_better = True
                 
                 if is_better:
-                    best_accuracy = avg_accuracy
+                    best_roi = roi
                     best_params = res
                     self.best_params = best_params # 存储到实例中以便在汇总报告中使用
         
         df_search = pd.DataFrame(all_search_results)
         
         print("\n" + "*" * 50)
-        print("【搜索完成！最优参数推荐】")
+        print("【搜索完成！最优参数推荐 (基于最高ROI)】")
         print(f"-> 最佳成本上限: {best_params['max_cost']}")
         print(f"-> 最佳风险系数: {best_params['risk_tolerance']}")
         print(f"-> 最高场次准确率: {best_params['match_accuracy']:.2%}")
@@ -446,7 +616,7 @@ if __name__ == "__main__":
     backtest = Ren9Backtest(ds, pe)
     
     # 待搜索的期数
-    period_ids = list(range(25065, 25194)) # 示例期数
+    period_ids = list(range(25001, 25080)) # 25194)) # 示例期数
     
     # 定义搜索范围
     cost_range = [32, 64, 128, 256]
@@ -461,4 +631,9 @@ if __name__ == "__main__":
                          max_cost=best_params['max_cost'], 
                          risk_tolerance=best_params['risk_tolerance'])
     backtest.print_report()
+    
+    # 保存报告到文件
+    print("\n>>> 正在保存回测报告...")
+    backtest.save_report_to_file("RX9_Backtest_Report.md")
+    backtest.save_results_to_csv("RX9_Backtest_Data.csv")
 

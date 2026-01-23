@@ -310,10 +310,30 @@ class RX9Optimizer:
         df_results = pd.DataFrame(results_data)
 
         
+        # 准备所有14场比赛的完整数据（包含未选中的5场）
+        all_matches_data = []
+        for analysis in match_analysis:
+            all_matches_data.append({
+                'id': analysis['id'],
+                'league': analysis['league'],
+                'home': analysis['home'],
+                'away': analysis['away'],
+                'odds': analysis['odds'],
+                'win_rate': f"{analysis['probs']['3']:.2%}",
+                'draw_rate': f"{analysis['probs']['1']:.2%}",
+                'loss_rate': f"{analysis['probs']['0']:.2%}",
+                'safety_score': f"{analysis['probs']['safety_score']:.2f}",
+                'value_score': f"{analysis['probs']['value_score']:.2f}",
+                'is_selected': analysis in selected_matches,
+                'bet': "".join(sorted(analysis['bet'], reverse=True)) if analysis['bet'] else "",
+                'bet_type': analysis['bet_type']
+            })
+        
         return {
             'df': df_results,
             'total_notes': current_notes,
-            'total_cost': current_notes * 2
+            'total_cost': current_notes * 2,
+            'all_matches': all_matches_data  # 新增：所有14场比赛的完整数据
         }
 
 # ==========================================
