@@ -124,53 +124,118 @@ class RX9Optimizer:
             match['bet_type'] = '单选'
 
         # ---------------------------------------------------------
-        # 优化步骤 A：冷门预警与稳胆保护 (Trap Detection & Banker Protection)
+        # 优化步骤 A：自适应冷门预警与稳胆保护 (Adaptive Trap Detection)
         # ---------------------------------------------------------
+        # 基于统计分布动态计算阈值，避免硬编码导致的过拟合
+        
+        # 计算当前比赛集合的统计特征
+        all_safety_scores = [m['probs']['safety_score'] for m in active_analysis]
+        all_first_probs = [m['choices'][0][1] for m in active_analysis]
+        all_draw_probs = [m['probs']['1'] for m in active_analysis]
+        
+        # 动态阈值：基于分位数而非固定值
+        # risk_tolerance 越高（激进），阈值越宽松；越低（保守），阈值越严格
+        safety_threshold = np.percentile(all_safety_scores, 30)  # 安全分低于30%分位数视为高风险
+        prob_high_threshold = np.percentile(all_first_probs, 70)  # 概率高于70%分位数视为高概率
+        prob_medium_threshold = np.percentile(all_first_probs, 50)  # 概率高于50%分位数视为中概率
+        draw_threshold = np.percentile(all_draw_probs, 60)  # 平局率高于60%分位数需要关注
+        
+        # 根据 risk_tolerance 动态调整敏感度
+        # risk_tolerance=0（保守）：阈值更严格，更容易触发双选
+        # risk_tolerance=1（激进）：阈值更宽松，更倾向于单选
+        safety_threshold *= (1.2 - risk_tolerance * 0.4)  # 保守时降低阈值，激进时提高
+        prob_high_threshold *= (1.1 - risk_tolerance * 0.2)  # 保守时降低高概率阈值
+        draw_threshold *= (0.9 + risk_tolerance * 0.2)  # 保守时降低平局阈值（更容易防平）
+        
         # 针对高胜率但有"陷阱"嫌疑的比赛进行强制双选
         for match in active_analysis:
             first_choice_prob = match['choices'][0][1]
             safety_score = match['probs']['safety_score']
             value_score = match['probs']['value_score']
             draw_prob = match['probs']['1']
+            league = match['league']
             
-            # 逻辑：
-            # 1. 如果胜率 > 70% 但安全分 < 0.65 -> 典型的大热必死陷阱（阈值从0.7降至0.65）
-            # 2. 如果博冷分 > 0.2 且 胜率 < 60% -> 存在显著博冷价值
-            # 3. 如果安全分 < 0.5 且 平率 > 12% -> 平局保护逻辑
-            is_trap = (first_choice_prob > 0.7 and safety_score < 0.65)
+            # 动态逻辑：
+            # 1. 如果胜率 > 动态高概率阈值 但安全分 < 动态安全阈值 -> 自适应陷阱识别
+            # 2. 如果博冷分 > 0.2 且 胜率 < 60% -> 存在显著博冷价值（保持不变）
+            # 3. 如果安全分 < 动态安全阈值 且 平率 > 动态平局阈值 -> 自适应平局保护
+            # 4. 如果联赛历史平局偏差大 -> 强化平局保护
+            
+            is_trap = (first_choice_prob > prob_high_threshold and safety_score < safety_threshold)
             has_high_value = (value_score > 0.2 and first_choice_prob < 0.6)
-            needs_draw_protection = (safety_score < 0.5 and draw_prob > 0.12)
+            
+            # 自适应平局保护：考虑联赛特性
+            league_draw_bias = 0
+            if hasattr(self.ds, 'df_leagues') and not self.ds.df_leagues.empty:
+                league_rows = self.ds.df_leagues[self.ds.df_leagues['赛事'] == league]
+                if not league_rows.empty:
+                    stats = league_rows.iloc[0]
+                    # 计算联赛平局真实频率偏差
+                    league_draw_bias = stats.get('真实频率_平', 0) - stats.get('理论概率_平', 0)
+            
+            # 平局保护阈值根据联赛特性动态调整
+            dynamic_draw_threshold = draw_threshold * (0.9 if league_draw_bias > 0.03 else 1.0)
+            needs_draw_protection = (
+                (safety_score < safety_threshold and draw_prob > dynamic_draw_threshold) or
+                (first_choice_prob > prob_high_threshold and draw_prob > dynamic_draw_threshold * 0.9)
+            )
             
             if is_trap or has_high_value:
                 if current_notes * 2 <= max_notes:
                     second_choice = match['choices'][1][0]
                     if second_choice not in match['bet']:
                         match['bet'].append(second_choice)
-                        match['bet_type'] = '双选(避险/博冷)'
+                        match['bet_type'] = '双选(自适应避险)'
                         current_notes *= 2
             
             if needs_draw_protection and '1' not in match['bet']:
                 if current_notes * 2 <= max_notes:
                     match['bet'].append('1')
-                    match['bet_type'] = '双选(平局保护)'
+                    match['bet_type'] = '双选(自适应平局保护)'
                     current_notes *= 2
 
         # ---------------------------------------------------------
-        # 优化步骤 B：复合权重升级 (Compound Weight Upgrade)
+        # 优化步骤 B：中高概率场次强制双选 (Medium-High Probability Protection)
         # ---------------------------------------------------------
+        # 新增：对于概率在55%-75%的比赛（最容易翻车的区间），强制双选
         current_draws = sum(1 for m in active_analysis if '1' in m['bet'])
         min_draws_target = int(target_draw_count)
+        
+        medium_high_candidates = [m for m in active_analysis if len(m['bet']) == 1]
+        for match in medium_high_candidates:
+            first_choice_prob = match['choices'][0][1]
+            if first_choice_prob > 0.55 and first_choice_prob < 0.75:
+                if current_notes * 2 <= max_notes:
+                    second_choice = match['choices'][1][0]
+                    if second_choice not in match['bet']:
+                        match['bet'].append(second_choice)
+                        match['bet_type'] = '双选(中高概率保护)'
+                        current_notes *= 2
+                        if second_choice == '1': current_draws += 1
 
+        # ---------------------------------------------------------
+        # 优化步骤 C：复合权重升级 (Compound Weight Upgrade)
+        # ---------------------------------------------------------
         # 对仍是单选的场次，计算复合升级权重：风险程度 * 价值潜力
         candidates_to_upgrade = [m for m in active_analysis if len(m['bet']) == 1]
         
         def calc_upgrade_weight(m):
-            # 风险(1-安全分)占比 40%，博冷价值占比 60%
+            # 自适应权重：基于risk_tolerance动态调整风险与价值的平衡
+            # risk_tolerance=0（保守）：风险权重70%，价值权重30%
+            # risk_tolerance=1（激进）：风险权重30%，价值权重70%
             risk_factor = (1 - m['probs']['safety_score'])
             value_factor = m['probs']['value_score']
-            # 如果是平局候选，根据目标平局数给予额外权重 (1.5倍以强化平局覆盖)
-            draw_weight = 1.5 if (m['choices'][1][0] == '1' and current_draws < min_draws_target) else 1.0
-            return (risk_factor * 0.4 + value_factor * 0.6) * draw_weight
+            
+            # 动态权重分配
+            risk_weight = 0.7 - risk_tolerance * 0.4
+            value_weight = 0.3 + risk_tolerance * 0.4
+            
+            # 如果是平局候选，根据目标平局数给予额外权重
+            # 保守策略更重视平局覆盖，激进策略相对弱化
+            base_draw_weight = 1.5 + (1 - risk_tolerance) * 0.5  # 保守时最高2.0，激进时最低1.5
+            draw_weight = base_draw_weight if (m['choices'][1][0] == '1' and current_draws < min_draws_target) else 1.0
+            
+            return (risk_factor * risk_weight + value_factor * value_weight) * draw_weight
 
         candidates_to_upgrade.sort(key=calc_upgrade_weight, reverse=True)
         

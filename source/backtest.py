@@ -305,7 +305,11 @@ class Ren9Backtest:
         print("=" * 100)
         
         for period_id, details in self.match_details.items():
-            period_info = self.results[self.results['期数id'] == period_id].iloc[0]
+            # 检查是否有该期结果
+            period_matches = self.results[self.results['期数id'] == period_id]
+            if period_matches.empty:
+                continue
+            period_info = period_matches.iloc[0]
             
             print(f"\n>>> 期数ID: {period_id}")
             print("-" * 100)
@@ -327,6 +331,82 @@ class Ren9Backtest:
             print(f"最终结果: {'🏆 中奖 (全部命中)' if period_info['是否中奖'] else '💀 未中 (有错失场次)'}")
             print("-" * 100)
 
+    def parameter_search(self, period_ids: List[int], cost_range: List[int], risk_range: List[float]):
+        """
+        参数搜索：寻找最佳参数组合
+        :param period_ids: 回测期数
+        :param cost_range: 成本上限范围
+        :param risk_range: 风险系数范围
+        :return: (最佳参数字典, 所有结果DataFrame)
+        """
+        print("\n" + "=" * 50)
+        print("【自适应参数网格搜索中...】")
+        print("=" * 50)
+        
+        best_accuracy = -1.0
+        best_params = {}
+        all_search_results = []
+
+        for cost in cost_range:
+            for risk in risk_range:
+                # 运行回测（静默模式，不打印详细报告）
+                self.run_backtest(period_ids, max_cost=cost, risk_tolerance=risk)
+                
+                # 计算综合指标
+                total_hits = 0
+                total_matches = 0
+                for pid in period_ids:
+                    details = self.match_details.get(pid, [])
+                    total_hits += sum(1 for d in details if d['is_hit'])
+                    total_matches += len(details)
+                
+                avg_accuracy = total_hits / total_matches if total_matches > 0 else 0
+                win_rate = self.calculate_hit_rate()
+                roi = self.calculate_roi()
+                total_cost = self.results['投注成本'].sum()
+                total_profit = self.results['净收益'].sum()
+                
+                res = {
+                    'max_cost': cost,
+                    'risk_tolerance': round(risk, 2),
+                    'match_accuracy': avg_accuracy,
+                    'win_rate': win_rate,
+                    'roi': roi,
+                    'total_cost': total_cost,
+                    'total_profit': total_profit
+                }
+                all_search_results.append(res)
+                
+                # 打印进度
+                print(f"测试: cost={cost:<4} risk={risk:.2f} | 准确率: {avg_accuracy:.2%} | ROI: {roi:.2%}")
+                
+                # 寻找最优：优先准确率，准确率相同时优先ROI，再相同时优先低成本
+                is_better = False
+                if avg_accuracy > best_accuracy:
+                    is_better = True
+                elif abs(avg_accuracy - best_accuracy) < 1e-6:
+                    if roi > best_params.get('roi', -np.inf):
+                        is_better = True
+                    elif abs(roi - best_params.get('roi', 0)) < 1e-6:
+                        if cost < best_params.get('max_cost', np.inf):
+                            is_better = True
+                
+                if is_better:
+                    best_accuracy = avg_accuracy
+                    best_params = res
+        
+        df_search = pd.DataFrame(all_search_results)
+        
+        print("\n" + "*" * 50)
+        print("【搜索完成！最优参数推荐】")
+        print(f"-> 最佳成本上限: {best_params['max_cost']}")
+        print(f"-> 最佳风险系数: {best_params['risk_tolerance']}")
+        print(f"-> 最高场次准确率: {best_params['match_accuracy']:.2%}")
+        print(f"-> 预计ROI: {best_params['roi']:.2%}")
+        print("*" * 50)
+        
+        return best_params, df_search
+
 
 if __name__ == "__main__":
     from data import DataSource
@@ -336,14 +416,20 @@ if __name__ == "__main__":
     pe = ProbabilityEngine(ds)
     backtest = Ren9Backtest(ds, pe)
     
-    # 执行最近两期的回测
+    # 待搜索的期数
     period_ids = [25193, 25192]
-    print(f"开始回测期数: {period_ids}...")
     
-    results = backtest.run_backtest(period_ids, max_cost=256, risk_tolerance=0.5)
+    # 定义搜索范围
+    cost_range = [64, 128, 256, 512]
+    risk_range = np.linspace(0.1, 0.9, 9) # 0.1, 0.2, ..., 0.9
     
-    print("\n回测概况:")
-    print(results)
+    # 执行参数搜索
+    best_params, search_results = backtest.parameter_search(period_ids, cost_range, risk_range)
     
-    backtest.print_detailed_period_reports()
+    # 使用最优参数运行最后一次回测并打印详细报告
+    print("\n\n>>> 正在使用最优参数运行最终回测验证...")
+    backtest.run_backtest(period_ids, 
+                         max_cost=best_params['max_cost'], 
+                         risk_tolerance=best_params['risk_tolerance'])
     backtest.print_report()
+
