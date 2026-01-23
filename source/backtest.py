@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from typing import List, Dict, Tuple, Optional
-from data import DataSource
+from data_sample import DataSource
 from strategy import RX9Optimizer
 from engine import ProbabilityEngine, MatchInfo
 
@@ -19,6 +19,7 @@ class Ren9Backtest:
         self.results = []
         self.period_results = []
         self.match_details = {} # 新增：存储每期的详细比赛结果 {period_id: [details]}
+        self.best_params = None # 新增：存储最佳参数组合
         
     def _get_match_result_code(self, result: str) -> str:
         """
@@ -128,11 +129,17 @@ class Ren9Backtest:
         
         for period_id in period_ids:
             matches = self._prepare_matches_for_period(period_id)
+            if not matches or len(matches) < 9:
+                # print(f"警告: 期数 {period_id} 比赛数据不足 ({len(matches)}场)，跳过该期。")
+                continue
+                
             actual_results = self._get_actual_results(period_id)
             
             bet_result = self.optimizer.generate_ticket(matches, max_cost, risk_tolerance)
             
             bet_df = bet_result['df']
+            if bet_df.empty:
+                continue
             
             selected_matches = []
             for idx, row in bet_df.iterrows():
@@ -158,13 +165,17 @@ class Ren9Backtest:
             
             cost = bet_result['total_cost']
             
+            # 获取当期的一等奖金（作为预期奖金参考）
+            actual_bonus = self.ds.get_period_bonus(period_id)
+            
             period_result = {
                 '期数id': period_id,
                 '投注成本': cost,
                 '奖金': payout,
                 '净收益': payout - cost,
                 '是否中奖': is_winner,
-                '投注场次数': len(selected_matches)
+                '投注场次数': len(selected_matches),
+                '当期一等奖': actual_bonus
             }
             
             self.period_results.append(period_result)
@@ -294,6 +305,15 @@ class Ren9Backtest:
         print(f"最大回撤: {report['最大回撤']:.2%}")
         print(f"夏普比率: {report['夏普比率']:.4f}")
         print(f"周期捕获率: {report['周期捕获率']:.2%}")
+        
+        if self.best_params:
+            print("-" * 50)
+            print("【历史最佳参数组合 (基于本次搜索)】")
+            print(f"-> 最佳成本上限: {self.best_params['max_cost']}")
+            print(f"-> 最佳风险系数: {self.best_params['risk_tolerance']}")
+            print(f"-> 最高场次准确率: {self.best_params['match_accuracy']:.2%}")
+            print(f"-> 预计ROI: {self.best_params['roi']:.2%}")
+            
         print("=" * 50)
 
     def print_detailed_period_reports(self):
@@ -328,6 +348,8 @@ class Ren9Backtest:
             print("-" * 100)
             print(f"单期统计: 命中场数 {hits}/9 | 准确率: {accuracy:.2%}")
             print(f"资金情况: 投入 {period_info['投注成本']:.2f} | 奖金 {period_info['奖金']:.2f} | 净收益 {period_info['净收益']:.2f}")
+            if '当期一等奖' in period_info:
+                print(f"预期奖金: {period_info['当期一等奖']:.2f} (当期实际一等奖金)")
             print(f"最终结果: {'🏆 中奖 (全部命中)' if period_info['是否中奖'] else '💀 未中 (有错失场次)'}")
             print("-" * 100)
 
@@ -361,24 +383,27 @@ class Ren9Backtest:
                     total_matches += len(details)
                 
                 avg_accuracy = total_hits / total_matches if total_matches > 0 else 0
-                win_rate = self.calculate_hit_rate()
+                winning_periods = int(self.results['是否中奖'].sum())
+                total_periods = len(self.results)
+                total_payout = self.results['奖金'].sum()
                 roi = self.calculate_roi()
                 total_cost = self.results['投注成本'].sum()
-                total_profit = self.results['净收益'].sum()
+                total_notes = int(total_cost // 2)
                 
                 res = {
                     'max_cost': cost,
                     'risk_tolerance': round(risk, 2),
                     'match_accuracy': avg_accuracy,
-                    'win_rate': win_rate,
+                    'winning_periods': winning_periods,
+                    'total_payout': total_payout,
+                    'total_notes': total_notes,
                     'roi': roi,
-                    'total_cost': total_cost,
-                    'total_profit': total_profit
+                    'total_cost': total_cost
                 }
                 all_search_results.append(res)
                 
                 # 打印进度
-                print(f"测试: cost={cost:<4} risk={risk:.2f} | 准确率: {avg_accuracy:.2%} | ROI: {roi:.2%}")
+                print(f"测试: cost={cost:<4} risk={risk:.2f} | 准确率: {avg_accuracy:.2%} | 投注: {total_notes:>4}注 | 中奖: {winning_periods}/{total_periods} | 奖金: {total_payout:>8.2f} | ROI: {roi:.2%}")
                 
                 # 寻找最优：优先准确率，准确率相同时优先ROI，再相同时优先低成本
                 is_better = False
@@ -394,6 +419,7 @@ class Ren9Backtest:
                 if is_better:
                     best_accuracy = avg_accuracy
                     best_params = res
+                    self.best_params = best_params # 存储到实例中以便在汇总报告中使用
         
         df_search = pd.DataFrame(all_search_results)
         
@@ -402,6 +428,9 @@ class Ren9Backtest:
         print(f"-> 最佳成本上限: {best_params['max_cost']}")
         print(f"-> 最佳风险系数: {best_params['risk_tolerance']}")
         print(f"-> 最高场次准确率: {best_params['match_accuracy']:.2%}")
+        print(f"-> 累计中奖次数: {best_params['winning_periods']}")
+        print(f"-> 累计中奖金额: {best_params['total_payout']:.2f}")
+        print(f"-> 累计投注注数: {best_params['total_notes']}")
         print(f"-> 预计ROI: {best_params['roi']:.2%}")
         print("*" * 50)
         
@@ -417,11 +446,11 @@ if __name__ == "__main__":
     backtest = Ren9Backtest(ds, pe)
     
     # 待搜索的期数
-    period_ids = [25193, 25192]
+    period_ids = list(range(25065, 25194)) # 示例期数
     
     # 定义搜索范围
-    cost_range = [64, 128, 256, 512]
-    risk_range = np.linspace(0.1, 0.9, 9) # 0.1, 0.2, ..., 0.9
+    cost_range = [32, 64, 128, 256]
+    risk_range = np.linspace(0.1, 0.9, 9)
     
     # 执行参数搜索
     best_params, search_results = backtest.parameter_search(period_ids, cost_range, risk_range)

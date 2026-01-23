@@ -21,7 +21,15 @@ class RX9Optimizer:
         :param max_cost: 仓位成本上限（元），每注2元
         :param risk_tolerance: 风险系数 (0-1)，0为极度保守，1为极度激进
         """
-        # 0. 获取目标赛果分布 (Draw Target)
+        # 0. 基础检查：任选9至少需要9场比赛
+        if not matches_14 or len(matches_14) < 9:
+            return {
+                'df': pd.DataFrame(),
+                'total_notes': 0,
+                'total_cost': 0
+            }
+
+        # 0.1 获取目标赛果分布 (Draw Target)
         target_stats = self.ds.get_target_frequency('一般')
         target_draw_count = target_stats['平'] # e.g. 3.14
         
@@ -133,19 +141,24 @@ class RX9Optimizer:
         all_first_probs = [m['choices'][0][1] for m in active_analysis]
         all_draw_probs = [m['probs']['1'] for m in active_analysis]
         
-        # 动态阈值：基于分位数而非固定值
-        # risk_tolerance 越高（激进），阈值越宽松；越低（保守），阈值越严格
-        safety_threshold = np.percentile(all_safety_scores, 30)  # 安全分低于30%分位数视为高风险
-        prob_high_threshold = np.percentile(all_first_probs, 70)  # 概率高于70%分位数视为高概率
-        prob_medium_threshold = np.percentile(all_first_probs, 50)  # 概率高于50%分位数视为中概率
-        draw_threshold = np.percentile(all_draw_probs, 60)  # 平局率高于60%分位数需要关注
+        if not all_safety_scores:
+            # 防御性代码：如果由于某种原因列表为空，使用保守的默认值
+            safety_threshold = 0.2
+            prob_high_threshold = 0.7
+            draw_threshold = 0.3
+        else:
+            # 动态阈值：基于分位数而非固定值
+            # risk_tolerance 越高（激进），阈值越宽松；越低（保守），阈值越严格
+            safety_threshold = np.percentile(all_safety_scores, 30)  # 安全分低于30%分位数视为高风险
+            prob_high_threshold = np.percentile(all_first_probs, 70)  # 概率高于70%分位数视为高概率
+            draw_threshold = np.percentile(all_draw_probs, 60)  # 平局率高于60%分位数需要关注
         
         # 根据 risk_tolerance 动态调整敏感度
         # risk_tolerance=0（保守）：阈值更严格，更容易触发双选
         # risk_tolerance=1（激进）：阈值更宽松，更倾向于单选
-        safety_threshold *= (1.2 - risk_tolerance * 0.4)  # 保守时降低阈值，激进时提高
-        prob_high_threshold *= (1.1 - risk_tolerance * 0.2)  # 保守时降低高概率阈值
-        draw_threshold *= (0.9 + risk_tolerance * 0.2)  # 保守时降低平局阈值（更容易防平）
+        safety_threshold *= (1.2 - risk_tolerance * 0.4)
+        prob_high_threshold *= (1.1 - risk_tolerance * 0.2)
+        draw_threshold *= (0.9 + risk_tolerance * 0.2)
         
         # 针对高胜率但有"陷阱"嫌疑的比赛进行强制双选
         for match in active_analysis:
@@ -155,14 +168,15 @@ class RX9Optimizer:
             draw_prob = match['probs']['1']
             league = match['league']
             
-            # 动态逻辑：
-            # 1. 如果胜率 > 动态高概率阈值 但安全分 < 动态安全阈值 -> 自适应陷阱识别
-            # 2. 如果博冷分 > 0.2 且 胜率 < 60% -> 存在显著博冷价值（保持不变）
-            # 3. 如果安全分 < 动态安全阈值 且 平率 > 动态平局阈值 -> 自适应平局保护
-            # 4. 如果联赛历史平局偏差大 -> 强化平局保护
+            # 改进的陷阱检测逻辑：
+            # 1. 胜率极高但安全分极低 -> 典型陷阱
+            # 2. 胜率中高且博冷分高 -> 存在冷门倾向
+            # 3. 赔率分布与真实胜率分布不匹配 (通过 safety_score 体现)
             
-            is_trap = (first_choice_prob > prob_high_threshold and safety_score < safety_threshold)
-            has_high_value = (value_score > 0.2 and first_choice_prob < 0.6)
+            is_trap = (
+                (first_choice_prob > prob_high_threshold and safety_score < safety_threshold) or
+                (first_choice_prob > 0.65 and safety_score < np.percentile(all_safety_scores, 50)) # 中等胜率但安全性一般
+            )
             
             # 自适应平局保护：考虑联赛特性
             league_draw_bias = 0
@@ -170,22 +184,22 @@ class RX9Optimizer:
                 league_rows = self.ds.df_leagues[self.ds.df_leagues['赛事'] == league]
                 if not league_rows.empty:
                     stats = league_rows.iloc[0]
-                    # 计算联赛平局真实频率偏差
                     league_draw_bias = stats.get('真实频率_平', 0) - stats.get('理论概率_平', 0)
             
             # 平局保护阈值根据联赛特性动态调整
-            dynamic_draw_threshold = draw_threshold * (0.9 if league_draw_bias > 0.03 else 1.0)
+            dynamic_draw_threshold = draw_threshold * (0.85 if league_draw_bias > 0.03 else 1.0)
             needs_draw_protection = (
                 (safety_score < safety_threshold and draw_prob > dynamic_draw_threshold) or
-                (first_choice_prob > prob_high_threshold and draw_prob > dynamic_draw_threshold * 0.9)
+                (first_choice_prob > prob_high_threshold and draw_prob > dynamic_draw_threshold * 0.8) or
+                (league_draw_bias > 0.05 and draw_prob > np.percentile(all_draw_probs, 40)) # 联赛平局多且本场平局率不低
             )
             
-            if is_trap or has_high_value:
+            if is_trap:
                 if current_notes * 2 <= max_notes:
                     second_choice = match['choices'][1][0]
                     if second_choice not in match['bet']:
                         match['bet'].append(second_choice)
-                        match['bet_type'] = '双选(自适应避险)'
+                        match['bet_type'] = '双选(自适应陷阱防御)'
                         current_notes *= 2
             
             if needs_draw_protection and '1' not in match['bet']:
