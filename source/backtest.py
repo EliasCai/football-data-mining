@@ -241,6 +241,10 @@ class Ren9Backtest:
             # 获取当期的一等奖金（作为预期奖金参考）
             actual_bonus = self.ds.get_period_bonus(period_id)
             
+            # 获取当期的冷热统计信息
+            bonus_info = self.ds.df_bonus[self.ds.df_bonus['期号'].astype(str) == str(period_id)]
+            coldness = bonus_info.iloc[0]['赛果冷热'] if not bonus_info.empty else "未知"
+            
             period_result = {
                 '期数id': period_id,
                 '投注成本': cost,
@@ -248,7 +252,8 @@ class Ren9Backtest:
                 '净收益': payout - cost,
                 '是否中奖': is_winner,
                 '投注场次数': len(selected_matches),
-                '当期一等奖': actual_bonus
+                '当期一等奖': actual_bonus,
+                '赛果冷热': coldness
             }
             
             self.period_results.append(period_result)
@@ -431,9 +436,14 @@ class Ren9Backtest:
                 if period_matches.empty: continue
                 info = period_matches.iloc[0]
                 
-                f.write(f"### 期数: {period_id}\n")
+                # 仅保留“一般”和“超级冷”的期数
+                if info['赛果冷热'] not in ['一般', '超级冷']:
+                    continue
+                
+                f.write(f"### 期数: {period_id} ({info['赛果冷热']})\n")
                 f.write(f"- **结果**: {'🏆 中奖' if info['是否中奖'] else '💀 未中'}\n")
-                f.write(f"- **盈亏**: 投入 {info['投注成本']:.2f} | 奖金 {info['奖金']:.2f} | 净收益 {info['净收益']:.2f}\n\n")
+                f.write(f"- **盈亏**: 投入 {info['投注成本']:.2f} | 奖金 {info['奖金']:.2f} | 净收益 {info['净收益']:.2f}\n")
+                f.write(f"- **预期奖金**: {info['当期一等奖']:.2f} (当期实际一等奖金)\n\n")
                 
                 f.write("| 场次 | 对阵 | 投注 | 结果 | 状态 | 胜率 | 平率 | 负率 | 安全分 | 博冷分 |\n")
                 f.write("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n")
@@ -489,7 +499,11 @@ class Ren9Backtest:
                 continue
             period_info = period_matches.iloc[0]
             
-            print(f"\n>>> 期数ID: {period_id}")
+            # 仅保留“一般”和“超级冷”的期数
+            if period_info['赛果冷热'] not in ['一般', '超级冷']:
+                continue
+            
+            print(f"\n>>> 期数ID: {period_id} ({period_info['赛果冷热']})")
             print("-" * 100)
             header = f"{'场次':<4} {'对阵信息':<22} {'投注':<8} {'结果':<4} {'状态':<8} {'胜率':<8} {'平率':<8} {'负率':<8} {'安全分':<8} {'博冷分':<8}"
             print(header)
@@ -518,9 +532,8 @@ class Ren9Backtest:
             print("-" * 100)
             print(f"单期统计: 选中场数 {selected_count}/9 | 命中场数 {selected_hits}/9 | 选中准确率: {accuracy:.2%}")
             print(f"资金情况: 投入 {period_info['投注成本']:.2f} | 奖金 {period_info['奖金']:.2f} | 净收益 {period_info['净收益']:.2f}")
-            if '当期一等奖' in period_info:
-                print(f"预期奖金: {period_info['当期一等奖']:.2f} (当期实际一等奖金)")
-            print(f"最终结果: {'🏆 中奖 (全部命中)' if period_info['是否中奖'] else '💀 未中 (有错失场次)'}")
+            print(f"预期奖金: {period_info['当期一等奖']:.2f} (当期实际一等奖金)")
+            print(f"最终结果: {'🏆 中奖' if period_info['是否中奖'] else '💀 未中 (有错失场次)'}")
             print("-" * 100)
 
     def parameter_search(self, period_ids: List[int], cost_range: List[int], risk_range: List[float]):
@@ -619,7 +632,7 @@ if __name__ == "__main__":
     period_ids = list(range(25001, 25080)) # 25194)) # 示例期数
     
     # 定义搜索范围
-    cost_range = [32, 64, 128, 256]
+    cost_range = [128, 256] # 32, 64, 
     risk_range = np.linspace(0.1, 0.9, 9)
     
     # 执行参数搜索
