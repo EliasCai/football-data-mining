@@ -61,7 +61,13 @@ class RX9Optimizer:
         return df
 
     def _strategy_XXX01(self, df: pd.DataFrame, i: int, j: int, k: int, l: int) -> Dict[str, Any]:
-        """策略 XXX01 (原简单策略)"""
+        """
+        策略 XXX01 核心逻辑：
+        1. 全选 (l 场)：选取不确定性（熵）最高的场次，投注 310
+        2. 双选平 (j 场)：按主平概率降序选取，投注“胜/负（取大者）+ 平”
+        3. 双选主客 (k 场)：按胜负概率差 (abs) 升序选取，投注 30
+        4. 单选稳胆 (i 场)：按概率最大值与 P值加权选取，投注 3 或 0
+        """
         selected_indices = []
 
         # 1. 全选 (l 场): 计算不确定性最大的 l 场
@@ -108,7 +114,13 @@ class RX9Optimizer:
         return self._format_results(df, selected_indices)
 
     def _strategy_XXX02(self, df: pd.DataFrame, i: int, j: int, k: int, l: int) -> Dict[str, Any]:
-        """策略 XXX02"""
+        """
+        策略 XXX02 核心逻辑：
+        1. 全选 (l 场)：选取不确定性（熵）最高的场次，投注 310
+        2. 双选平 (j 场)：按主平概率降序选取，投注“胜/负（取大者）+ 平”
+        3. 双选主客 (k 场)：按胜负概率差 (abs) 升序选取，投注 30
+        4. 单选博冷 (i 场)：按主负概率降序且 P值 > 0.5 选取，投注 0
+        """
         selected_indices = []
 
         # 1. 全选 (l 场): 计算不确定性最大的 l 场
