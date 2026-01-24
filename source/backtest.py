@@ -74,22 +74,34 @@ class Ren9Backtest:
         
         return total_payout, is_winner, details
 
-    def run_backtest(self, period_ids: List[int], i: int = 5, j: int = 2, k: int = 1, l: int = 1, strategy_name: str = 'XXX01') -> pd.DataFrame:
+    def run_backtest(self, period_ids: List[int], i: int = 5, j: int = 2, k: int = 1, l: int = 1, 
+                     strategy_name: str = 'strategy_01', betting_scenario: str = 'all') -> pd.DataFrame:
         """
         运行回测
         :param period_ids: 要回测的期数ID列表
         :param i, j, k, l: 策略参数
-        :param strategy_name: 策略名称
+        :param strategy_name: 策略名称 ('strategy_01', 'strategy_02')
+        :param betting_scenario: 投注场景 ('all': 每一期均投注, 'only_cold': 只有预测冷热为1才投注)
         :return: 回测结果DataFrame
         """
         self.period_results = []
         self.match_details = {} 
-        self.current_params = {'i': i, 'j': j, 'k': k, 'l': l, 'strategy': strategy_name}
+        self.current_params = {'i': i, 'j': j, 'k': k, 'l': l, 'strategy': strategy_name, 'scenario': betting_scenario}
+        
+        # 确保预测算法已运行
+        df_bonus = self.pe.predict_cold_warm()
         
         # 获取合并后的全量数据
         df_all = self.pe.get_merged_data()
         
         for period_id in period_ids:
+            # 检查投注场景过滤
+            if betting_scenario == 'only_cold':
+                # 在 df_bonus 中查找该期的预测冷热
+                bonus_row = df_bonus[df_bonus['期号'].astype(str) == str(period_id)]
+                if bonus_row.empty or bonus_row.iloc[0].get('预测冷热', 0) != 1:
+                    continue
+
             # 获取当期数据 (14场)
             df_period = df_all[df_all['期数id'] == period_id].head(14).reset_index(drop=True)
             
@@ -103,7 +115,8 @@ class Ren9Backtest:
             # 生成投注方案
             try:
                 bet_result = self.optimizer.generate_ticket(df_period, i, j, k, l, strategy_name=strategy_name)
-            except Exception:
+            except Exception as e:
+                # print(f"Error in generating ticket for {period_id}: {e}")
                 continue
                 
             df_bet = bet_result['df']
@@ -113,15 +126,15 @@ class Ren9Backtest:
             payout, is_winner, _ = self._calculate_period_payout(period_id, df_bet, actual_results)
             
             # 存储详情用于报告
-            # 这里简化处理，直接存储推荐结果
             self.match_details[period_id] = bet_result['all_matches']
             
             cost = bet_result['total_cost']
             actual_bonus = self.ds.get_period_bonus(period_id)
             
-            # 获取冷热信息
-            bonus_info = self.ds.df_bonus[self.ds.df_bonus['期号'].astype(str) == str(period_id)]
+            # 获取实际冷热信息用于显示
+            bonus_info = df_bonus[df_bonus['期号'].astype(str) == str(period_id)]
             coldness = bonus_info.iloc[0]['赛果冷热'] if not bonus_info.empty else "未知"
+            pred_cold = bonus_info.iloc[0]['预测冷热'] if not bonus_info.empty else 0
             
             self.period_results.append({
                 '期数id': period_id,
@@ -130,7 +143,8 @@ class Ren9Backtest:
                 '净收益': payout - cost,
                 '是否中奖': is_winner,
                 '当期一等奖': actual_bonus,
-                '赛果冷热': coldness
+                '实际冷热': coldness,
+                '预测冷热': pred_cold
             })
         
         self.results = pd.DataFrame(self.period_results)
@@ -166,6 +180,7 @@ class Ren9Backtest:
         print("【任选9 总体回测汇总报告】")
         print("=" * 50)
         print(f"策略名称: {self.current_params.get('strategy')}")
+        print(f"投注场景: {'每一期均投注' if self.current_params.get('scenario') == 'all' else '仅预测冷时投注'}")
         print(f"参数设置: i={self.current_params.get('i')}, j={self.current_params.get('j')}, "
               f"k={self.current_params.get('k')}, l={self.current_params.get('l')}")
         print(f"总投注期数: {report['总投注期数']}")
@@ -185,14 +200,49 @@ if __name__ == "__main__":
     pe = ProbabilityEngine(ds)
     backtester = Ren9Backtest(ds, pe)
     
-    # 获取可用的期号
-    available_periods = ds.df_matches['期数id'].unique().tolist()
-    test_periods = available_periods[:] # 测试前10期
+    # 获取可用的期号 (排除掉没有比赛结果的期号)
+    available_periods = ds.df_matches.dropna(subset=['比赛结果'])['期数id'].unique().tolist()
+    available_periods.sort()
     
-    print(f"开始回测 {len(test_periods)} 期数据 (策略: strategy_01)...")
-    backtester.run_backtest(test_periods, i=1, j=3, k=3, l=2, strategy_name='strategy_01')
-    backtester.print_report()
+    # 取最近的 20 期进行回测 (或者根据实际数据量调整)
+    test_periods = available_periods[:] if len(available_periods) > 20 else available_periods
     
-    print(f"\n开始回测 {len(test_periods)} 期数据 (策略: strategy_02)...")
-    backtester.run_backtest(test_periods, i=1, j=3, k=4, l=1, strategy_name='strategy_02')
-    backtester.print_report()
+    # 为不同策略配置独立的 (i, j, k, l) 参数
+    strategy_configs = {
+        'strategy_01': {'i': 1, 'j': 3, 'k': 3, 'l': 2},
+        'strategy_02': {'i': 1, 'j': 3, 'k': 4, 'l': 1}
+    }
+    scenarios = ['all', 'only_cold']
+    
+    summary_results = []
+    
+    print(f"开始全量回测对比 (共 {len(test_periods)} 期)...")
+    
+    for strategy, params in strategy_configs.items():
+        for scenario in scenarios:
+            print(f"\n运行: {strategy} | {scenario}")
+            # 使用策略各自独立的参数进行对比
+            backtester.run_backtest(test_periods, 
+                                    i=params['i'], j=params['j'], k=params['k'], l=params['l'], 
+                                    strategy_name=strategy, betting_scenario=scenario)
+            backtester.print_report()
+            
+            # 收集摘要数据
+            report = backtester.generate_report()
+            if report:
+                summary_results.append({
+                    '策略': strategy,
+                    '参数': f"i={params['i']},j={params['j']},k={params['k']},l={params['l']}",
+                    '场景': '每期投注' if scenario == 'all' else '仅预测冷',
+                    '期数': report['总投注期数'],
+                    '中奖': report['中奖期数'],
+                    '命中率': f"{report['命中率']:.2%}",
+                    'ROI': f"{report['ROI']:.2%}"
+                })
+    
+    print("\n" + "="*80)
+    print("【回测结果最终对比摘要】")
+    print("="*80)
+    summary_df = pd.DataFrame(summary_results)
+    print(summary_df.to_string(index=False))
+    print("="*80)
