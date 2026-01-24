@@ -185,8 +185,8 @@ if __name__ == "__main__":
     
     # 获取可用的期号
     available_periods = ds.df_matches['期数id'].unique().tolist()
-    test_periods = available_periods[:10] # 测试前10期
+    test_periods = available_periods[:] # 测试前10期
     
     print(f"开始回测 {len(test_periods)} 期数据...")
-    backtester.run_backtest(test_periods, i=1, j=4, k=2, l=2)
+    backtester.run_backtest(test_periods, i=1, j=3, k=3, l=2)
     backtester.print_report()
