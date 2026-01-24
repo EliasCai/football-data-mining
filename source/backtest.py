@@ -169,13 +169,48 @@ class Ren9Backtest:
         }
         return report
 
+    def calculate_win_cycles(self) -> Dict:
+        """
+        计算当前回测结果的中奖周期统计
+        中奖周期 = 本次中奖期数id - 上次中奖期数id
+        """
+        if self.results is None or self.results.empty:
+            return {'说明': '无回测结果'}
+
+        wins_df = self.results[self.results['是否中奖'] == True]
+        win_count = len(wins_df)
+
+        if win_count < 2:
+            return {
+                '中奖次数': win_count,
+                '中奖期数': wins_df['期数id'].tolist(),
+                '平均周期': None,
+                '说明': '中奖次数不足2次，无法计算周期'
+            }
+
+        win_periods = wins_df['期数id'].sort_values().tolist()
+        cycles = [win_periods[i+1] - win_periods[i] for i in range(len(win_periods)-1)]
+
+        return {
+            '策略': self.current_params.get('strategy'),
+            '场景': self.current_params.get('scenario'),
+            '中奖期数': win_periods,
+            '周期列表': cycles,
+            '平均周期': np.mean(cycles),
+            '最短周期': min(cycles),
+            '最长周期': max(cycles),
+            '周期标准差': np.std(cycles),
+            '中奖次数': win_count,
+            '总跨度': win_periods[-1] - win_periods[0]
+        }
+
     def print_report(self):
         """打印回测报告"""
         report = self.generate_report()
         if not report:
             print("没有回测结果可供显示。")
             return
-            
+
         print("\n" + "=" * 50)
         print("【任选9 总体回测汇总报告】")
         print("=" * 50)
@@ -191,6 +226,89 @@ class Ren9Backtest:
         print(f"累计净收益: {report['累计净收益']:.2f} 元")
         print(f"ROI: {report['ROI']:.2%}")
         print("=" * 50)
+
+def calculate_win_cycle_stats(winning_periods_map: dict) -> dict:
+    """
+    计算各策略的平均中奖周期（基于 winning_periods_map）
+
+    Args:
+        winning_periods_map: {(strategy, scenario): set(中奖期号)}
+
+    Returns:
+        {key: 统计字典}
+    """
+    stats = {}
+
+    for key, wins in winning_periods_map.items():
+        if len(wins) < 2:
+            stats[key] = {
+                '中奖期数': sorted(wins),
+                '周期列表': [],
+                '平均周期': None,
+                '最短周期': None,
+                '最长周期': None,
+                '周期标准差': None,
+                '说明': '中奖次数不足2次，无法计算周期'
+            }
+            continue
+
+        sorted_wins = sorted(wins)
+        cycles = [sorted_wins[i+1] - sorted_wins[i] for i in range(len(sorted_wins)-1)]
+
+        stats[key] = {
+            '中奖期数': sorted_wins,
+            '周期列表': cycles,
+            '平均周期': np.mean(cycles),
+            '最短周期': min(cycles),
+            '最长周期': max(cycles),
+            '周期标准差': np.std(cycles),
+            '总跨度': sorted_wins[-1] - sorted_wins[0]
+        }
+
+    return stats
+
+def print_win_cycle_report(win_cycle_stats: dict):
+    """打印中奖周期统计报告"""
+    print("\n" + "="*80)
+    print("【各策略中奖周期统计】")
+    print("="*80)
+
+    for key, stat in win_cycle_stats.items():
+        strategy, scenario = key
+        scenario_name = '每期投注' if scenario == 'all' else '仅预测冷'
+
+        print(f"\n策略: {strategy} | 场景: {scenario_name}")
+
+        if stat['周期列表']:
+            print(f"  中奖期数: {stat['中奖期数']}")
+            print(f"  周期列表: {stat['周期列表']}")
+            print(f"  平均周期: {stat['平均周期']:.2f} 期")
+            print(f"  最短周期: {stat['最短周期']} 期")
+            print(f"  最长周期: {stat['最长周期']} 期")
+            print(f"  周期标准差: {stat['周期标准差']:.2f}")
+            print(f"  总跨度: {stat['总跨度']} 期")
+        else:
+            print(f"  中奖期数: {stat['中奖期数']}")
+            print(f"  说明: {stat['说明']}")
+
+    # 汇总对比
+    print("\n" + "-"*80)
+    print("【中奖周期对比摘要】")
+    print("-"*80)
+
+    valid_stats = {k: v for k, v in win_cycle_stats.items() if v['周期列表']}
+
+    if valid_stats:
+        # 找出最优策略
+        best_avg = min(valid_stats.items(), key=lambda x: x[1]['平均周期'])
+        worst_avg = max(valid_stats.items(), key=lambda x: x[1]['平均周期'])
+
+        print(f"平均周期最短: {best_avg[0]} ({best_avg[1]['平均周期']:.2f}期)")
+        print(f"平均周期最长: {worst_avg[0]} ({worst_avg[1]['平均周期']:.2f}期)")
+    else:
+        print("所有策略中奖次数均不足2次，无法进行对比")
+
+    print("="*80)
 
 if __name__ == "__main__":
     from data import DataSource
@@ -261,7 +379,7 @@ if __name__ == "__main__":
         s1_wins = winning_periods_map.get(('strategy_01', scenario), set())
         s2_wins = winning_periods_map.get(('strategy_02', scenario), set())
         intersection = s1_wins.intersection(s2_wins)
-        
+
         print(f"场景: {scenario_name}")
         print(f"  - strategy_01 中奖期数: {len(s1_wins)}")
         print(f"  - strategy_02 中奖期数: {len(s2_wins)}")
@@ -270,3 +388,7 @@ if __name__ == "__main__":
             print(f"  - 共同中奖期号: {sorted(list(intersection))}")
         print("-" * 40)
     print("="*80)
+
+    # 统计各策略中奖周期
+    win_cycle_stats = calculate_win_cycle_stats(winning_periods_map)
+    print_win_cycle_report(win_cycle_stats)
