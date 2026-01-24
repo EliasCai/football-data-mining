@@ -194,6 +194,7 @@ class Ren9Backtest:
         :return: 回测结果DataFrame
         """
         self.period_results = []
+        self.match_details = {} # 重置每期的详细比赛结果
         self.current_params = {'max_cost': max_cost, 'risk_tolerance': risk_tolerance}
         
         for period_id in period_ids:
@@ -436,8 +437,8 @@ class Ren9Backtest:
                 if period_matches.empty: continue
                 info = period_matches.iloc[0]
                 
-                # 仅保留“一般”和“超级冷”的期数
-                if info['赛果冷热'] not in ['一般', '超级冷']:
+                # 仅保留“一般冷”和“超级冷”的期数
+                if info['赛果冷热'] not in ['一般冷', '超级冷']:
                     continue
                 
                 f.write(f"### 期数: {period_id} ({info['赛果冷热']})\n")
@@ -499,8 +500,8 @@ class Ren9Backtest:
                 continue
             period_info = period_matches.iloc[0]
             
-            # 仅保留“一般”和“超级冷”的期数
-            if period_info['赛果冷热'] not in ['一般', '超级冷']:
+            # 仅保留“一般冷”和“超级冷”的期数
+            if period_info['赛果冷热'] not in ['一般冷', '超级冷']:
                 continue
             
             print(f"\n>>> 期数ID: {period_id} ({period_info['赛果冷热']})")
@@ -643,6 +644,10 @@ if __name__ == "__main__":
     backtest.run_backtest(period_ids, 
                          max_cost=best_params['max_cost'], 
                          risk_tolerance=best_params['risk_tolerance'])
+    
+    # 显式更新 best_params，确保它包含最终运行的 ROI 和其它统计数据
+    # 注意：parameter_search 内部已经更新了 self.best_params，
+    # 但再次运行 run_backtest 后，我们可以确保 self.results 等状态与 best_params 一致
     backtest.print_report()
     
     # 保存报告到文件
