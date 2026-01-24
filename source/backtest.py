@@ -215,6 +215,8 @@ if __name__ == "__main__":
     scenarios = ['all', 'only_cold']
     
     summary_results = []
+    # 用于记录每个 (策略, 场景) 的中奖期号集合
+    winning_periods_map = {}
     
     print(f"开始全量回测对比 (共 {len(test_periods)} 期)...")
     
@@ -222,10 +224,14 @@ if __name__ == "__main__":
         for scenario in scenarios:
             print(f"\n运行: {strategy} | {scenario}")
             # 使用策略各自独立的参数进行对比
-            backtester.run_backtest(test_periods, 
+            results = backtester.run_backtest(test_periods, 
                                     i=params['i'], j=params['j'], k=params['k'], l=params['l'], 
                                     strategy_name=strategy, betting_scenario=scenario)
             backtester.print_report()
+            
+            # 记录中奖期号
+            wins = set(results[results['是否中奖'] == True]['期数id'].tolist())
+            winning_periods_map[(strategy, scenario)] = wins
             
             # 收集摘要数据
             report = backtester.generate_report()
@@ -245,4 +251,22 @@ if __name__ == "__main__":
     print("="*80)
     summary_df = pd.DataFrame(summary_results)
     print(summary_df.to_string(index=False))
+    
+    # 统计策略间中奖期号的交集
+    print("\n" + "="*80)
+    print("【策略中奖交集统计】")
+    print("="*80)
+    for scenario in scenarios:
+        scenario_name = '每期投注' if scenario == 'all' else '仅预测冷'
+        s1_wins = winning_periods_map.get(('strategy_01', scenario), set())
+        s2_wins = winning_periods_map.get(('strategy_02', scenario), set())
+        intersection = s1_wins.intersection(s2_wins)
+        
+        print(f"场景: {scenario_name}")
+        print(f"  - strategy_01 中奖期数: {len(s1_wins)}")
+        print(f"  - strategy_02 中奖期数: {len(s2_wins)}")
+        print(f"  - 两个策略共同中奖期数: {len(intersection)}")
+        if intersection:
+            print(f"  - 共同中奖期号: {sorted(list(intersection))}")
+        print("-" * 40)
     print("="*80)

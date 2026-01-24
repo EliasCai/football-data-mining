@@ -70,6 +70,7 @@ class ProbabilityEngine:
                     continue
         
         # 将结果更新回 DataSource
+        df['预测冷热'] = df['预测冷热'].map(lambda x: abs(x-1))
         self.ds.df_bonus = df
         return df
 
