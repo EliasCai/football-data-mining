@@ -74,16 +74,17 @@ class Ren9Backtest:
         
         return total_payout, is_winner, details
 
-    def run_backtest(self, period_ids: List[int], i: int = 5, j: int = 2, k: int = 1, l: int = 1) -> pd.DataFrame:
+    def run_backtest(self, period_ids: List[int], i: int = 5, j: int = 2, k: int = 1, l: int = 1, strategy_name: str = 'XXX01') -> pd.DataFrame:
         """
         运行回测
         :param period_ids: 要回测的期数ID列表
         :param i, j, k, l: 策略参数
+        :param strategy_name: 策略名称
         :return: 回测结果DataFrame
         """
         self.period_results = []
         self.match_details = {} 
-        self.current_params = {'i': i, 'j': j, 'k': k, 'l': l}
+        self.current_params = {'i': i, 'j': j, 'k': k, 'l': l, 'strategy': strategy_name}
         
         # 获取合并后的全量数据
         df_all = self.pe.get_merged_data()
@@ -101,7 +102,7 @@ class Ren9Backtest:
             
             # 生成投注方案
             try:
-                bet_result = self.optimizer.generate_ticket(df_period, i, j, k, l)
+                bet_result = self.optimizer.generate_ticket(df_period, i, j, k, l, strategy_name=strategy_name)
             except Exception:
                 continue
                 
@@ -164,6 +165,7 @@ class Ren9Backtest:
         print("\n" + "=" * 50)
         print("【任选9 总体回测汇总报告】")
         print("=" * 50)
+        print(f"策略名称: {self.current_params.get('strategy')}")
         print(f"参数设置: i={self.current_params.get('i')}, j={self.current_params.get('j')}, "
               f"k={self.current_params.get('k')}, l={self.current_params.get('l')}")
         print(f"总投注期数: {report['总投注期数']}")
@@ -187,6 +189,10 @@ if __name__ == "__main__":
     available_periods = ds.df_matches['期数id'].unique().tolist()
     test_periods = available_periods[:] # 测试前10期
     
-    print(f"开始回测 {len(test_periods)} 期数据...")
-    backtester.run_backtest(test_periods, i=1, j=3, k=3, l=2)
+    print(f"开始回测 {len(test_periods)} 期数据 (策略: XXX01)...")
+    backtester.run_backtest(test_periods, i=1, j=3, k=3, l=2, strategy_name='XXX01')
+    backtester.print_report()
+
+    print(f"\n开始回测 {len(test_periods)} 期数据 (策略: XXX02)...")
+    backtester.run_backtest(test_periods, i=1, j=3, k=4, l=1, strategy_name='XXX02')
     backtester.print_report()

@@ -16,10 +16,11 @@ class RX9Optimizer:
     
     def __init__(self):
         self.strategies = {
-            'simple': self._strategy_simple
+            'XXX01': self._strategy_XXX01,
+            'XXX02': self._strategy_XXX02
         }
 
-    def generate_ticket(self, df_period: pd.DataFrame, i: int, j: int, k: int, l: int, strategy_name: str = 'simple') -> Dict[str, Any]:
+    def generate_ticket(self, df_period: pd.DataFrame, i: int, j: int, k: int, l: int, strategy_name: str = 'XXX01') -> Dict[str, Any]:
         """
         核心策略生成接口
         
@@ -59,8 +60,8 @@ class RX9Optimizer:
         df['类型'] = "未选"
         return df
 
-    def _strategy_simple(self, df: pd.DataFrame, i: int, j: int, k: int, l: int) -> Dict[str, Any]:
-        """简单策略实现逻辑"""
+    def _strategy_XXX01(self, df: pd.DataFrame, i: int, j: int, k: int, l: int) -> Dict[str, Any]:
+        """策略 XXX01 (原简单策略)"""
         selected_indices = []
 
         # 1. 全选 (l 场): 计算不确定性最大的 l 场
@@ -104,7 +105,62 @@ class RX9Optimizer:
             df.at[idx, '类型'] = "单选"
             selected_indices.append(idx)
 
-        # 整理输出结果
+        return self._format_results(df, selected_indices)
+
+    def _strategy_XXX02(self, df: pd.DataFrame, i: int, j: int, k: int, l: int) -> Dict[str, Any]:
+        """策略 XXX02"""
+        selected_indices = []
+
+        # 1. 全选 (l 场): 计算不确定性最大的 l 场
+        def _calc_entropy(row):
+            probs = [row['主胜概率'], row['主平概率'], row['主负概率']]
+            return -sum(p * np.log(p + 1e-10) for p in probs if p > 0)
+            
+        df['entropy'] = df.apply(_calc_entropy, axis=1)
+        l_selected = df.sort_values('entropy', ascending=False).head(l).index.tolist()
+        for idx in l_selected:
+            df.at[idx, '推荐'] = "310"
+            df.at[idx, '类型'] = "全选"
+            selected_indices.append(idx)
+
+        # 2. 双选 (主平/客平) (j 场): 按照主平概率倒序选择最大的 j 场
+        remaining = df.drop(selected_indices)
+        j_selected = remaining.sort_values('主平概率', ascending=False).head(j).index.tolist()
+        for idx in j_selected:
+            row = df.loc[idx]
+            main_choice = '3' if row['主胜概率'] >= row['主负概率'] else '0'
+            df.at[idx, '推荐'] = "".join(sorted([main_choice, '1'], reverse=True))
+            df.at[idx, '类型'] = "双选(主平/客平)"
+            selected_indices.append(idx)
+
+        # 3. 双选 (主客) (k 场): 按照 abs(主胜 - 主负) 的顺序选择 k 场
+        remaining = df.drop(selected_indices)
+        remaining['diff_wl'] = (remaining['主胜概率'] - remaining['主负概率']).abs()
+        k_selected = remaining.sort_values('diff_wl', ascending=True).head(k).index.tolist()
+        for idx in k_selected:
+            df.at[idx, '推荐'] = "30"
+            df.at[idx, '类型'] = "双选(主客)"
+            selected_indices.append(idx)
+
+        # 4. 单选 (i 场): 按照主负倒序选择最大的 i 场，并且 P值 > 0.5
+        remaining = df.drop(selected_indices)
+        # 过滤 P值 > 0.5
+        remaining_filtered = remaining[remaining['P值'] > 0.5]
+        if len(remaining_filtered) < i:
+            # 如果符合条件的不足 i 场，降级处理或给出警告，这里为了鲁棒性，取剩下的主负最大的
+            i_selected = remaining.sort_values('主负概率', ascending=False).head(i).index.tolist()
+        else:
+            i_selected = remaining_filtered.sort_values('主负概率', ascending=False).head(i).index.tolist()
+            
+        for idx in i_selected:
+            df.at[idx, '推荐'] = "0"
+            df.at[idx, '类型'] = "单选(博冷客胜)"
+            selected_indices.append(idx)
+
+        return self._format_results(df, selected_indices)
+
+    def _format_results(self, df: pd.DataFrame, selected_indices: List[Any]) -> Dict[str, Any]:
+        """整理并格式化输出结果"""
         df_results = df.loc[selected_indices].sort_index().copy()
         
         # 格式化展示列 (用于回测报告)
@@ -112,7 +168,7 @@ class RX9Optimizer:
         df_results['平率'] = df_results['主平概率'].apply(lambda x: f"{x:.2%}")
         df_results['负率'] = df_results['主负概率'].apply(lambda x: f"{x:.2%}")
         df_results['安全分'] = df_results['P值'].apply(lambda x: f"{x:.2f}")
-        df_results['博冷分'] = df_results['entropy'].apply(lambda x: f"{x:.2f}")
+        df_results['博冷分'] = df_results.get('entropy', 0).apply(lambda x: f"{x:.2f}")
 
         # 计算总注数
         notes = 1
@@ -148,12 +204,13 @@ def main():
     
     # 设定参数测试 1: i=5, j=2, k=1, l=1
     try:
-        print("\n--- 测试方案 1 (5+2+1+1) ---")
-        result = optimizer.generate_ticket(df_period, i=5, j=2, k=1, l=1)
+        print("\n--- 测试方案 XXX01 (5+2+1+1) ---")
+        result = optimizer.generate_ticket(df_period, i=5, j=2, k=1, l=1, strategy_name='XXX01')
         print(f"总注数: {result['total_notes']}, 成本: {result['total_cost']} 元")
+        print(result['df'][['赛事', '主队', '客队', '推荐', '类型']])
         
-        print("\n--- 测试方案 2 (3+3+2+1) ---")
-        result2 = optimizer.generate_ticket(df_period, i=3, j=3, k=2, l=1)
+        print("\n--- 测试方案 XXX02 (5+2+1+1) ---")
+        result2 = optimizer.generate_ticket(df_period, i=5, j=2, k=1, l=1, strategy_name='XXX02')
         print(f"总注数: {result2['total_notes']}, 成本: {result2['total_cost']} 元")
         print(result2['df'][['赛事', '主队', '客队', '推荐', '类型']])
     except Exception as e:
