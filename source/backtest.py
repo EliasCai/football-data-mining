@@ -189,10 +189,10 @@ if __name__ == "__main__":
     available_periods = ds.df_matches['期数id'].unique().tolist()
     test_periods = available_periods[:] # 测试前10期
     
-    print(f"开始回测 {len(test_periods)} 期数据 (策略: XXX01)...")
-    backtester.run_backtest(test_periods, i=1, j=3, k=3, l=2, strategy_name='XXX01')
+    print(f"开始回测 {len(test_periods)} 期数据 (策略: strategy_01)...")
+    backtester.run_backtest(test_periods, i=1, j=3, k=3, l=2, strategy_name='strategy_01')
     backtester.print_report()
-
-    print(f"\n开始回测 {len(test_periods)} 期数据 (策略: XXX02)...")
-    backtester.run_backtest(test_periods, i=1, j=3, k=4, l=1, strategy_name='XXX02')
+    
+    print(f"\n开始回测 {len(test_periods)} 期数据 (策略: strategy_02)...")
+    backtester.run_backtest(test_periods, i=1, j=3, k=4, l=1, strategy_name='strategy_02')
     backtester.print_report()

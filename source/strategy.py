@@ -16,8 +16,8 @@ class RX9Optimizer:
     
     def __init__(self):
         self.strategies = {
-            'XXX01': self._strategy_XXX01,
-            'XXX02': self._strategy_XXX02
+            'strategy_01': self._strategy_01,
+            'strategy_02': self._strategy_02
         }
 
     def generate_ticket(self, df_period: pd.DataFrame, i: int, j: int, k: int, l: int, strategy_name: str = 'XXX01') -> Dict[str, Any]:
@@ -60,9 +60,9 @@ class RX9Optimizer:
         df['类型'] = "未选"
         return df
 
-    def _strategy_XXX01(self, df: pd.DataFrame, i: int, j: int, k: int, l: int) -> Dict[str, Any]:
+    def _strategy_01(self, df: pd.DataFrame, i: int, j: int, k: int, l: int) -> Dict[str, Any]:
         """
-        策略 XXX01 核心逻辑：
+        策略 strategy_01 核心逻辑：
         1. 全选 (l 场)：选取不确定性（熵）最高的场次，投注 310
         2. 双选平 (j 场)：按主平概率降序选取，投注“胜/负（取大者）+ 平”
         3. 双选主客 (k 场)：按胜负概率差 (abs) 升序选取，投注 30
@@ -113,9 +113,9 @@ class RX9Optimizer:
 
         return self._format_results(df, selected_indices)
 
-    def _strategy_XXX02(self, df: pd.DataFrame, i: int, j: int, k: int, l: int) -> Dict[str, Any]:
+    def _strategy_02(self, df: pd.DataFrame, i: int, j: int, k: int, l: int) -> Dict[str, Any]:
         """
-        策略 XXX02 核心逻辑：
+        策略 strategy_02 核心逻辑：
         1. 全选 (l 场)：选取不确定性（熵）最高的场次，投注 310
         2. 双选平 (j 场)：按主平概率降序选取，投注“胜/负（取大者）+ 平”
         3. 双选主客 (k 场)：按胜负概率差 (abs) 升序选取，投注 30
