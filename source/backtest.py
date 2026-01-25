@@ -330,7 +330,7 @@ if __name__ == "__main__":
     strategy_configs = {
         'strategy_01': {'i': 1, 'j': 3, 'k': 3, 'l': 2},
         'strategy_02': {'i': 1, 'j': 3, 'k': 4, 'l': 1},
-        'strategy_03': {'i': 1, 'j': 3, 'k': 4, 'l': 1}
+        'strategy_03': {'i': 2, 'j': 3, 'k': 3, 'l': 1}
     }
     scenarios = ['all', 'only_cold']
     
