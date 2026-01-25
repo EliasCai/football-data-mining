@@ -182,12 +182,14 @@ class RX9Optimizer:
 
     def _strategy_03(self, df: pd.DataFrame, i: int, j: int, k: int, l: int) -> Dict[str, Any]:
         """
-        策略 strategy_03 核心逻辑（期望价值策略）：
-        1. 全选 (l 场)：按照（主胜EV + 主平EV + 主负EV）的方差，方差越大越好（三方向EV差异大=不确定性高）
-        2. 双选平 (j 场)：按照主平概率排序，选主平概率最大的 j 场，投注"胜/负（取大者）+ 平"
-        3. 双选主客 (k 场)：同时P值越高越好的思想构造评估值a2，取a2值最大的k场，投注 30
-        4. 单选博冷 (i 场)：按照（本场赛事主负概率+ 真实频率_负 - 理论概率_负）的值越大越好，
-                          同时P值越低越好的思想构造评估值a3，取a3值最大的i场，投注 0
+        策略 strategy_03 核心逻辑（综合评估策略）：
+        选择顺序：i -> k -> j -> l
+
+        评估值公式 = 比赛概率 + 联赛相对概率 * (P值 或 1-P值)
+        - 联赛相对概率 = 真实频率 - 理论概率
+        - 单选博冷: 用 (1-P值)，P值越小差异越显著，越适合博冷
+        - 双选主客/平: 用 P值，P值大表示稳定，适合双选
+        - 全选: 用 (1-P值)，高不确定性需要显著性差异
         """
         selected_indices = []
 
@@ -195,25 +197,41 @@ class RX9Optimizer:
         if not isinstance(df, pd.DataFrame) or df.empty:
             return {'df': pd.DataFrame(), 'total_notes': 0, 'total_cost': 0, 'all_matches': []}
 
-        # 计算 EV（期望价值）= SP × 概率 - 1
-        df['EV胜'] = df['主胜SP值'] * df['主胜概率'] - 1
-        df['EV平'] = df['主平SP值'] * df['主平概率'] - 1
-        df['EV负'] = df['主负SP值'] * df['主负概率'] - 1
+        # 计算联赛相对概率（真实频率 - 理论概率）
+        df['联赛偏差_胜'] = df['真实频率_胜'] - df['理论概率_胜']
+        df['联赛偏差_平'] = df['真实频率_平'] - df['理论概率_平']
+        df['联赛偏差_负'] = df['真实频率_负'] - df['理论概率_负']
 
-        # 1. 全选 (l 场): 按照 EV方差降序选择
-        ev_cols = ['EV胜', 'EV平', 'EV负']
-        if all(col in df.columns for col in ev_cols):
-            df['ev_variance'] = df[ev_cols].var(axis=1)
-            l_selected = df.sort_values('ev_variance', ascending=False).head(l).index.tolist()
-            for idx in l_selected:
-                df.at[idx, '推荐'] = "310"
-                df.at[idx, '类型'] = "全选_EV方差"
+        # P值转换
+        df['1减P值'] = 1 - df['P值']
+
+        # 1. 单选博冷 (i 场): 评估值 = 主负概率 + 联赛偏差_负 * (1-P值)
+        if i > 0:
+            df['a_单选'] = df['主负概率'] + df['联赛偏差_负'] * df['1减P值']
+            i_selected = df.sort_values('a_单选', ascending=False).head(i).index.tolist()
+            for idx in i_selected:
+                df.at[idx, '推荐'] = "0"
+                df.at[idx, '类型'] = "单选(博冷客胜)_S3"
                 selected_indices.append(idx)
 
-        # 2. 双选 (主平/客平) (j 场): 按照主平概率降序选择
-        if j > 0:
+        # 2. 双选主客 (k 场): 评估值 = (主胜+主负)/2 + (|偏差胜|+|偏差负|)/2 * P值
+        if k > 0:
+            df['a_双选主客'] = (
+                (df['主胜概率'] + df['主负概率']) / 2 +
+                (df['联赛偏差_胜'].abs() + df['联赛偏差_负'].abs()) / 2 * df['P值']
+            )
             remaining = df.drop(selected_indices)
-            j_selected = remaining.sort_values('主平概率', ascending=False).head(j).index.tolist()
+            k_selected = remaining.sort_values('a_双选主客', ascending=False).head(k).index.tolist()
+            for idx in k_selected:
+                df.at[idx, '推荐'] = "30"
+                df.at[idx, '类型'] = "双选(主客)_S3"
+                selected_indices.append(idx)
+
+        # 3. 双选平 (j 场): 评估值 = 主平概率 + 联赛偏差_平 * P值
+        if j > 0:
+            df['a_双选平'] = df['主平概率'] + df['联赛偏差_平'] * df['P值']
+            remaining = df.drop(selected_indices)
+            j_selected = remaining.sort_values('a_双选平', ascending=False).head(j).index.tolist()
             for idx in j_selected:
                 row = df.loc[idx]
                 main_choice = '3' if row['主胜概率'] >= row['主负概率'] else '0'
@@ -221,25 +239,19 @@ class RX9Optimizer:
                 df.at[idx, '类型'] = "双选(主平/客平)_S3"
                 selected_indices.append(idx)
 
-        # 3. 双选 (主客) (k 场): a2 = P值，取a2最大的k场
-        if k > 0:
-            remaining = df.drop(selected_indices)
-            remaining['a2'] = remaining['P值']
-            k_selected = remaining.sort_values('a2', ascending=False).head(k).index.tolist()
-            for idx in k_selected:
-                df.at[idx, '推荐'] = "30"
-                df.at[idx, '类型'] = "双选(主客)_S3"
-                selected_indices.append(idx)
-
-        # 4. 单选 (i 场): a3 = (主负概率 + 真实频率_负 - 理论概率_负) - P值
-        if i > 0:
-            remaining = df.drop(selected_indices)
-            remaining['a3'] = (remaining['主负概率'] + remaining['真实频率_负'] - remaining['理论概率_负']) - remaining['P值']
-            i_selected = remaining.sort_values('a3', ascending=False).head(i).index.tolist()
-            for idx in i_selected:
-                df.at[idx, '推荐'] = "0"
-                df.at[idx, '类型'] = "单选(博冷客胜)_S3"
-                selected_indices.append(idx)
+        # 4. 全选 (l 场): 评估值 = 熵 + 联赛平均偏差 * (1-P值)
+        def _calc_entropy(row):
+            probs = [row['主胜概率'], row['主平概率'], row['主负概率']]
+            return -sum(p * np.log(p + 1e-10) for p in probs if p > 0)
+        df['entropy'] = df.apply(_calc_entropy, axis=1)
+        df['联赛平均偏差'] = (df['联赛偏差_胜'].abs() + df['联赛偏差_平'].abs() + df['联赛偏差_负'].abs()) / 3
+        df['a_全选'] = df['entropy'] + df['联赛平均偏差'] * df['1减P值']
+        remaining = df.drop(selected_indices)
+        l_selected = remaining.sort_values('a_全选', ascending=False).head(l).index.tolist()
+        for idx in l_selected:
+            df.at[idx, '推荐'] = "310"
+            df.at[idx, '类型'] = "全选_S3"
+            selected_indices.append(idx)
 
         return self._format_results(df, selected_indices)
 

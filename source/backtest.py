@@ -116,7 +116,7 @@ class Ren9Backtest:
             try:
                 bet_result = self.optimizer.generate_ticket(df_period, i, j, k, l, strategy_name=strategy_name)
             except Exception as e:
-                print(f"Error in generating ticket for period {period_id}, strategy {strategy_name}: {e}")
+                # print(f"Error in generating ticket for {period_id}: {e}")
                 continue
                 
             df_bet = bet_result['df']
@@ -373,7 +373,7 @@ if __name__ == "__main__":
     print(summary_df.to_string(index=False))
     
     # 统计策略间中奖期号的交集
-    print("\n" + "="*80)
+    print("\n" + "="*80)    
     print("【策略中奖交集统计】")
     print("="*80)
     for scenario in scenarios:
