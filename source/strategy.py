@@ -214,22 +214,19 @@ class RX9Optimizer:
                 df.at[idx, '类型'] = "单选(博冷客胜)_S3"
                 selected_indices.append(idx)
 
-        # 2. 双选主客 (k 场): 评估值 = (主胜+主负)/2 + (|偏差胜|+|偏差负|)/2 * P值
+        # 2. 双选主客 (k 场): 评估值 = 主平概率 - 偏差_平 × (1-P值)，取低值
         if k > 0:
-            df['a_双选主客'] = (
-                (df['主胜概率'] + df['主负概率']) / 2 +
-                (df['联赛偏差_胜'].abs() + df['联赛偏差_负'].abs()) / 2 * df['P值']
-            )
+            df['a_双选主客'] = df['主平概率'] - df['联赛偏差_平'] * df['1减P值']
             remaining = df.drop(selected_indices)
-            k_selected = remaining.sort_values('a_双选主客', ascending=False).head(k).index.tolist()
+            k_selected = remaining.sort_values('a_双选主客', ascending=True).head(k).index.tolist()
             for idx in k_selected:
                 df.at[idx, '推荐'] = "30"
                 df.at[idx, '类型'] = "双选(主客)_S3"
                 selected_indices.append(idx)
 
-        # 3. 双选平 (j 场): 评估值 = 主平概率 + 联赛偏差_平 * P值
+        # 3. 双选平 (j 场): 评估值 = 主平概率 + 偏差_平 × (1-P值)，取高值
         if j > 0:
-            df['a_双选平'] = df['主平概率'] + df['联赛偏差_平'] * df['P值']
+            df['a_双选平'] = df['主平概率'] + df['联赛偏差_平'] * df['1减P值']
             remaining = df.drop(selected_indices)
             j_selected = remaining.sort_values('a_双选平', ascending=False).head(j).index.tolist()
             for idx in j_selected:
