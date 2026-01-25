@@ -116,7 +116,7 @@ class Ren9Backtest:
             try:
                 bet_result = self.optimizer.generate_ticket(df_period, i, j, k, l, strategy_name=strategy_name)
             except Exception as e:
-                # print(f"Error in generating ticket for {period_id}: {e}")
+                print(f"Error in generating ticket for period {period_id}, strategy {strategy_name}: {e}")
                 continue
                 
             df_bet = bet_result['df']
@@ -320,6 +320,7 @@ if __name__ == "__main__":
     
     # 获取可用的期号 (排除掉没有比赛结果的期号)
     available_periods = ds.df_matches.dropna(subset=['比赛结果'])['期数id'].unique().tolist()
+    available_periods = [int(p) for p in available_periods if p < 26000]
     available_periods.sort()
     
     # 取最近的 20 期进行回测 (或者根据实际数据量调整)
@@ -328,7 +329,8 @@ if __name__ == "__main__":
     # 为不同策略配置独立的 (i, j, k, l) 参数
     strategy_configs = {
         'strategy_01': {'i': 1, 'j': 3, 'k': 3, 'l': 2},
-        'strategy_02': {'i': 1, 'j': 3, 'k': 4, 'l': 1}
+        'strategy_02': {'i': 1, 'j': 3, 'k': 4, 'l': 1},
+        'strategy_03': {'i': 1, 'j': 3, 'k': 4, 'l': 1}
     }
     scenarios = ['all', 'only_cold']
     
@@ -378,14 +380,25 @@ if __name__ == "__main__":
         scenario_name = '每期投注' if scenario == 'all' else '仅预测冷'
         s1_wins = winning_periods_map.get(('strategy_01', scenario), set())
         s2_wins = winning_periods_map.get(('strategy_02', scenario), set())
-        intersection = s1_wins.intersection(s2_wins)
+        s3_wins = winning_periods_map.get(('strategy_03', scenario), set())
+
+        # 三策略交集
+        intersection_123 = s1_wins.intersection(s2_wins).intersection(s3_wins)
+        # 两两交集
+        intersection_12 = s1_wins.intersection(s2_wins)
+        intersection_13 = s1_wins.intersection(s3_wins)
+        intersection_23 = s2_wins.intersection(s3_wins)
 
         print(f"场景: {scenario_name}")
         print(f"  - strategy_01 中奖期数: {len(s1_wins)}")
         print(f"  - strategy_02 中奖期数: {len(s2_wins)}")
-        print(f"  - 两个策略共同中奖期数: {len(intersection)}")
-        if intersection:
-            print(f"  - 共同中奖期号: {sorted(list(intersection))}")
+        print(f"  - strategy_03 中奖期数: {len(s3_wins)}")
+        print(f"  - 三个策略共同中奖期数: {len(intersection_123)}")
+        print(f"  - S1&S2共同中奖期数: {len(intersection_12)}")
+        print(f"  - S1&S3共同中奖期数: {len(intersection_13)}")
+        print(f"  - S2&S3共同中奖期数: {len(intersection_23)}")
+        if intersection_123:
+            print(f"  - 三策略共同中奖期号: {sorted(list(intersection_123))}")
         print("-" * 40)
     print("="*80)
 

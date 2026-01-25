@@ -17,7 +17,8 @@ class RX9Optimizer:
     def __init__(self):
         self.strategies = {
             'strategy_01': self._strategy_01,
-            'strategy_02': self._strategy_02
+            'strategy_02': self._strategy_02,
+            'strategy_03': self._strategy_03
         }
 
     def generate_ticket(self, df_period: pd.DataFrame, i: int, j: int, k: int, l: int, strategy_name: str = 'XXX01') -> Dict[str, Any]:
@@ -52,8 +53,16 @@ class RX9Optimizer:
         for col in prob_cols:
             df[col] = pd.to_numeric(df.get(col, 0.33), errors='coerce').fillna(0.33)
         
-        # P值处理
+        # P值处理 (来自联赛统计)
         df['P值'] = pd.to_numeric(df.get('P值', 0.5), errors='coerce').fillna(0.5)
+        
+        # 联赛理论概率与真实频率处理
+        league_cols = [
+            '理论概率_胜', '理论概率_平', '理论概率_负',
+            '真实频率_胜', '真实频率_平', '真实频率_负'
+        ]
+        for col in league_cols:
+            df[col] = pd.to_numeric(df.get(col, 0.0), errors='coerce').fillna(0.0)
         
         # 初始化结果列
         df['推荐'] = ""
@@ -171,16 +180,88 @@ class RX9Optimizer:
 
         return self._format_results(df, selected_indices)
 
+    def _strategy_03(self, df: pd.DataFrame, i: int, j: int, k: int, l: int) -> Dict[str, Any]:
+        """
+        策略 strategy_03 核心逻辑（期望价值策略）：
+        1. 全选 (l 场)：按照（主胜EV + 主平EV + 主负EV）的方差，方差越大越好（三方向EV差异大=不确定性高）
+        2. 双选平 (j 场)：按照主平概率排序，选主平概率最大的 j 场，投注"胜/负（取大者）+ 平"
+        3. 双选主客 (k 场)：同时P值越高越好的思想构造评估值a2，取a2值最大的k场，投注 30
+        4. 单选博冷 (i 场)：按照（本场赛事主负概率+ 真实频率_负 - 理论概率_负）的值越大越好，
+                          同时P值越低越好的思想构造评估值a3，取a3值最大的i场，投注 0
+        """
+        selected_indices = []
+
+        # 确保df是DataFrame类型
+        if not isinstance(df, pd.DataFrame) or df.empty:
+            return {'df': pd.DataFrame(), 'total_notes': 0, 'total_cost': 0, 'all_matches': []}
+
+        # 计算 EV（期望价值）= SP × 概率 - 1
+        df['EV胜'] = df['主胜SP值'] * df['主胜概率'] - 1
+        df['EV平'] = df['主平SP值'] * df['主平概率'] - 1
+        df['EV负'] = df['主负SP值'] * df['主负概率'] - 1
+
+        # 1. 全选 (l 场): 按照 EV方差降序选择
+        ev_cols = ['EV胜', 'EV平', 'EV负']
+        if all(col in df.columns for col in ev_cols):
+            df['ev_variance'] = df[ev_cols].var(axis=1)
+            l_selected = df.sort_values('ev_variance', ascending=False).head(l).index.tolist()
+            for idx in l_selected:
+                df.at[idx, '推荐'] = "310"
+                df.at[idx, '类型'] = "全选_EV方差"
+                selected_indices.append(idx)
+
+        # 2. 双选 (主平/客平) (j 场): 按照主平概率降序选择
+        if j > 0:
+            remaining = df.drop(selected_indices)
+            j_selected = remaining.sort_values('主平概率', ascending=False).head(j).index.tolist()
+            for idx in j_selected:
+                row = df.loc[idx]
+                main_choice = '3' if row['主胜概率'] >= row['主负概率'] else '0'
+                df.at[idx, '推荐'] = "".join(sorted([main_choice, '1'], reverse=True))
+                df.at[idx, '类型'] = "双选(主平/客平)_S3"
+                selected_indices.append(idx)
+
+        # 3. 双选 (主客) (k 场): a2 = P值，取a2最大的k场
+        if k > 0:
+            remaining = df.drop(selected_indices)
+            remaining['a2'] = remaining['P值']
+            k_selected = remaining.sort_values('a2', ascending=False).head(k).index.tolist()
+            for idx in k_selected:
+                df.at[idx, '推荐'] = "30"
+                df.at[idx, '类型'] = "双选(主客)_S3"
+                selected_indices.append(idx)
+
+        # 4. 单选 (i 场): a3 = (主负概率 + 真实频率_负 - 理论概率_负) - P值
+        if i > 0:
+            remaining = df.drop(selected_indices)
+            remaining['a3'] = (remaining['主负概率'] + remaining['真实频率_负'] - remaining['理论概率_负']) - remaining['P值']
+            i_selected = remaining.sort_values('a3', ascending=False).head(i).index.tolist()
+            for idx in i_selected:
+                df.at[idx, '推荐'] = "0"
+                df.at[idx, '类型'] = "单选(博冷客胜)_S3"
+                selected_indices.append(idx)
+
+        return self._format_results(df, selected_indices)
+
     def _format_results(self, df: pd.DataFrame, selected_indices: List[Any]) -> Dict[str, Any]:
         """整理并格式化输出结果"""
+        if not selected_indices:
+            return {'df': pd.DataFrame(), 'total_notes': 0, 'total_cost': 0, 'all_matches': df.to_dict('records')}
+
         df_results = df.loc[selected_indices].sort_index().copy()
-        
+
         # 格式化展示列 (用于回测报告)
         df_results['胜率'] = df_results['主胜概率'].apply(lambda x: f"{x:.2%}")
         df_results['平率'] = df_results['主平概率'].apply(lambda x: f"{x:.2%}")
         df_results['负率'] = df_results['主负概率'].apply(lambda x: f"{x:.2%}")
         df_results['安全分'] = df_results['P值'].apply(lambda x: f"{x:.2f}")
-        df_results['博冷分'] = df_results.get('entropy', 0).apply(lambda x: f"{x:.2f}")
+        # 处理博冷分列，如果存在则格式化，否则填充默认值
+        if 'entropy' in df_results.columns:
+            df_results['博冷分'] = df_results['entropy'].apply(lambda x: f"{x:.2f}")
+        elif 'ev_variance' in df_results.columns:
+            df_results['博冷分'] = df_results['ev_variance'].apply(lambda x: f"{x:.2f}")
+        else:
+            df_results['博冷分'] = '0.00'
 
         # 计算总注数
         notes = 1
@@ -208,6 +289,7 @@ def main():
         return
         
     # 选取第一个期号进行测试
+    
     period_id = df_merged['期数id'].iloc[0]
     df_period = df_merged[df_merged['期数id'] == period_id].head(14).reset_index(drop=True)
     

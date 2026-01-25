@@ -16,14 +16,20 @@ class ProbabilityEngine:
         if not hasattr(self.ds, 'df_matches') or self.ds.df_matches.empty:
             return pd.DataFrame()
             
-        # 执行合并：基于'赛事'列进行左连接
-        # df_matches 包含比赛细节，df_leagues 包含联赛统计特征
+        # 执行合并：基于'赛事'和'期数id'列进行左连接
+        # df_matches 包含比赛细节，df_leagues 包含从 CSV 加载的联赛统计特征
         df_merged = pd.merge(
             self.ds.df_matches, 
             self.ds.df_leagues, 
-            on='赛事', 
+            on=['赛事', '期数id'], 
             how='left'
         )
+        
+        # 针对 df_leagues 为空的字段通过填充 0 解决
+        if not self.ds.df_leagues.empty:
+            league_cols = [col for col in self.ds.df_leagues.columns if col not in ['赛事', '期数id']]
+            df_merged[league_cols] = df_merged[league_cols].fillna(0)
+            
         return df_merged
 
     def get_merged_data(self) -> pd.DataFrame:
