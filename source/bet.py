@@ -9,7 +9,7 @@ class ColdnessPredictor:
     """
     冷热预测器：基于滚动窗口和 5CV 集成学习的逻辑回归模型
     """
-    def __init__(self, window_size=200, n_splits=5, threshold=0.4):
+    def __init__(self, window_size=200, n_splits=5, threshold=0.5):
         self.window_size = window_size
         self.n_splits = n_splits
         self.threshold = threshold
@@ -87,7 +87,7 @@ class ColdnessPredictor:
             
         # 取 5 次预测概率的平均值
         avg_prob = np.mean(preds_prob)
-        final_pred = 1 if avg_prob >= self.threshold else 0
+        final_pred = 1 if avg_prob < self.threshold else 0
         return final_pred, avg_prob
 
     def batch_predict(self, period_ids):

@@ -58,7 +58,7 @@ class ProbabilityEngine:
         df['预测概率'] = 0.0
         
         # 初始化预测器
-        predictor = ColdnessPredictor(threshold=0.4)
+        predictor = ColdnessPredictor(threshold=0.5)
         predictor.prepare_data()
         
         # 批量预测所有期号
