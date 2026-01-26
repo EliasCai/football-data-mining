@@ -17,9 +17,10 @@ class ColdnessPredictor:
         self.project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self.data = None
 
-    def prepare_data(self, file_path=None):
+    def prepare_data(self, file_path=None, latest_df=None):
         """
-        加载并准备数据特征
+        加载并准备数据特征。
+        如果提供了 latest_df，则将其整合到历史数据中。
         """
         if file_path is None:
             file_path = os.path.join(self.project_root, 'data', 'lottery', 'predict_lottery_cold.csv')
@@ -29,18 +30,113 @@ class ColdnessPredictor:
             return None
 
         df = pd.read_csv(file_path)
+        
+        # 如果有最新一期的数据，进行整合
+        if latest_df is not None:
+            # 确保列顺序一致，且包含 target 和 赛果冷热（填充为 NaN）
+            for col in ['赛果冷热', 'target']:
+                if col not in latest_df.columns:
+                    latest_df[col] = np.nan
+            
+            # 保证列顺序与历史数据一致
+            latest_df = latest_df[df.columns]
+            df = pd.concat([df, latest_df], ignore_index=True)
+
         df = df.set_index("期数id")
         
         # 特征工程：增加滞后项 (N-1, N-2 期是否冷门)
         df["N-1为1"] = df["target"].shift(1)
         df["N-2为1"] = df["target"].shift(2)
-        df = df.dropna(axis=0)
-
-        # 选定特征列
-        # 排除非特征列 '赛果冷热' 和 'target'
+        
+        # 记录特征列名（不包含目标列和描述列）
         self.feature_cols = [c for c in df.columns if c not in ['赛果冷热', 'target']]
+        
+        # 删除特征中包含 NaN 的行（主要是前两期的滞后项）
+        df = df.dropna(subset=self.feature_cols)
+        
+        # 对于训练和回测，我们需要删除 target 为空的行
+        # 但如果是为了预测最后一期，我们需要保留最后一行
         self.data = df
         return df
+
+    def process_overview_data(self, period_id: str) -> pd.DataFrame:
+        """
+        处理指定期数的概览数据，计算赛事类别分布。
+        """
+        # 1. 读取指定期数的概览数据
+        file_path = os.path.join(self.project_root, 'data', 'overview', f"{period_id}.csv")
+        if not os.path.exists(file_path):
+            print(f"警告: 找不到期数 {period_id} 的概览文件 {file_path}")
+            return pd.DataFrame()
+
+        df_overview_period = pd.read_csv(file_path)
+
+        # 2. 定义赛事与聚类标签的映射
+        df_league_cluster_map = pd.DataFrame({
+            "赛事": ["世亚预", "世俱杯", "世欧预", "亚冠", "德乙", "德甲", "意甲", "挪超", "欧冠", "欧协联", "欧国联", "欧洲杯", "欧联", "法乙", "法甲", "瑞典超", "美职", "英冠", "英超", "荷乙", "荷甲", "葡超", "西甲", "足总杯", "非洲杯"],
+            "聚类标签": [2, 7, 3, 2, 4, 1, 1, 6, 7, 4, 5, 1, 1, 0, 5, 4, 0, 4, 1, 4, 6, 6, 5, 1, 6]
+        }).set_index("赛事")
+
+        # 3. 将赛事类别映射到概览数据中
+        df_overview_period["赛事类别"] = df_overview_period["赛事"].map(
+            lambda x: df_league_cluster_map.loc[x, "聚类标签"] if x in df_league_cluster_map.index else -1
+        )
+
+        # 4. 透视表格以获取每期各种赛事类别的比赛数量
+        df_category_counts = df_overview_period.pivot_table(
+            index="期数id",
+            columns="赛事类别",
+            aggfunc="count",
+            values="比赛id",
+            fill_value=0
+        )
+
+        # 5. 确保所有赛事类别列（-1到7）都存在，如果不存在则填充0
+        for category_id in range(-1, 8):
+            if category_id not in df_category_counts.columns:
+                df_category_counts[category_id] = 0
+        
+        # 确保列顺序一致，便于后续模型使用
+        df_category_counts = df_category_counts[sorted(df_category_counts.columns)]
+        
+        # 将 index 转换回列，以便后续合并
+        df_category_counts = df_category_counts.reset_index()
+        
+        # 确保列名是字符串，与历史数据一致
+        df_category_counts.columns = [str(c) if isinstance(c, int) else c for c in df_category_counts.columns]
+
+        return df_category_counts
+
+    def predict_latest(self, period_id: str):
+        """
+        整合最新数据并预测
+        """
+        # 1. 处理最新数据
+        latest_df = self.process_overview_data(period_id)
+        if latest_df.empty:
+            return None, 0.0
+
+        # 2. 整合历史数据与最新数据
+        self.prepare_data(latest_df=latest_df)
+        
+        # 3. 进行预测
+        try:
+            pid = int(period_id)
+        except ValueError:
+            pid = period_id
+
+        # 打印整合后的特征数据，确认无误
+        print(f"\n期数 {period_id} 的整合特征:")
+        print(self.data.loc[[pid], self.feature_cols].to_markdown())
+
+        pred, prob = self.predict_single(pid)
+        
+        print(f"\n>>> 期数 {period_id} 预测结果:")
+        print(f"    - 预测类别: {'冷门' if pred == 1 else '一般'} ({pred})")
+        print(f"    - 冷门概率: {prob:.4f}")
+        print(f"    - 判定阈值: {self.threshold}")
+        
+        return pred, prob
 
     def predict_single(self, target_period_id):
         """
@@ -67,6 +163,12 @@ class ColdnessPredictor:
         
         X_train_window = X_all.iloc[train_start:train_end]
         y_train_window = y_all.iloc[train_start:train_end]
+        
+        # 确保训练数据中没有缺失值 (针对 target 列)
+        valid_idx = y_train_window.notna()
+        X_train_window = X_train_window[valid_idx]
+        y_train_window = y_train_window[valid_idx]
+
         X_test_sample = X_all.iloc[target_idx:target_idx+1]
         
         # 5折时间序列交叉验证
@@ -154,6 +256,12 @@ class ColdnessPredictor:
 
 if __name__ == "__main__":
     # 脚本模式下的自测逻辑
-    predictor = ColdnessPredictor(threshold=0.4)
+    predictor = ColdnessPredictor(threshold=0.5)
+    
+    # 1. 运行回测评估（可选）
     predictor.run_evaluation(test_size=100)
+    
+    # 2. 测试最新一期的预测
+    id_to_process = "26018"
+    predictor.predict_latest(id_to_process)
 
