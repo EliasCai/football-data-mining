@@ -320,7 +320,7 @@ if __name__ == "__main__":
     
     # 获取可用的期号 (排除掉没有比赛结果的期号)
     available_periods = ds.df_matches.dropna(subset=['比赛结果'])['期数id'].unique().tolist()
-    available_periods = [int(p) for p in available_periods if p < 26000]
+    available_periods = [int(p) for p in available_periods if p < 26018]
     available_periods.sort()
     
     # 取最近的 20 期进行回测 (或者根据实际数据量调整)
