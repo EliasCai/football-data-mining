@@ -1,116 +1,159 @@
-from sklearn.model_selection import TimeSeriesSplit
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import classification_report, confusion_matrix, precision_score, recall_score, f1_score, accuracy_score
 import pandas as pd
 import numpy as np
 import os
+from sklearn.model_selection import TimeSeriesSplit
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report, confusion_matrix, precision_score, recall_score, f1_score, accuracy_score
 
-# 动态获取项目根目录并构建路径
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-csv_path = os.path.join(project_root, 'data', 'lottery', 'predict_lottery_cold.csv')
+class ColdnessPredictor:
+    """
+    冷热预测器：基于滚动窗口和 5CV 集成学习的逻辑回归模型
+    """
+    def __init__(self, window_size=200, n_splits=5, threshold=0.4):
+        self.window_size = window_size
+        self.n_splits = n_splits
+        self.threshold = threshold
+        self.feature_cols = None
+        self.project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self.data = None
 
-df3 = pd.read_csv(csv_path)
-
-df3 = df3.set_index("期数id")
-df3["N-1为1"] = df3["target"].shift(1)
-df3["N-2为1"] = df3["target"].shift(2)
-
-df3 = df3.dropna(axis=0)
-
-# Prepare the data
-# Features are the counts of matches in each category
-feature_cols = df3.columns[[0,1,2,3,4,5,6,7,8,11,12]]
-X_all = df3.iloc[:,[0,1,2,3,4,5,6,7,8,11,12]]
-y_all = df3['target']
-
-# 需求配置
-WINDOW_SIZE = 200    # N-200 窗口大小
-TEST_SIZE = 100       # 预测最后 20 期
-N_SPLITS = 5         # 5CV (5折交叉验证)
-
-# 确保有足够的数据
-if len(df3) < WINDOW_SIZE + TEST_SIZE:
-    raise ValueError(f"数据量不足，需要至少 {WINDOW_SIZE + TEST_SIZE} 条数据，当前只有 {len(df3)} 条")
-
-# 待预测的最后 20 期索引
-test_indices = range(len(df3) - TEST_SIZE, len(df3))
-
-y_true_all = []
-y_pred_all = []
-y_prob_all = []
-
-print(f"开始滚动窗口预测评估...")
-print(f"窗口大小: {WINDOW_SIZE}, 测试期数: {TEST_SIZE}, 交叉验证: {N_SPLITS}折 (TimeSeriesSplit)")
-
-for i in test_indices:
-    # 当前预测的期号索引为 i
-    # 训练数据窗口：[i - WINDOW_SIZE, i)
-    train_start = i - WINDOW_SIZE
-    train_end = i
-    
-    X_train_window = X_all.iloc[train_start:train_end]
-    y_train_window = y_all.iloc[train_start:train_end]
-    
-    # 当前测试样本
-    X_test_sample = X_all.iloc[i:i+1]
-    y_test_sample = y_all.iloc[i]
-    
-    # 5折时间序列交叉验证 (用于模型训练集成)
-    # 注意：这里的 CV 是在 WINDOW_SIZE 的训练集内部进行的
-    # 但用户的需求是 "5次建模的结果求平均"，通常指 Bagging 或者 CV 后的平均
-    # 结合 "严格按照顺序拆分"，使用 TimeSeriesSplit 切分训练窗口
-    
-    tscv = TimeSeriesSplit(n_splits=N_SPLITS)
-    
-    preds_prob = []
-    
-    # 在当前训练窗口内进行 5 次切分训练
-    # 每次切分会使用窗口内不同长度的历史数据来训练模型
-    # 然后预测同一个未来的样本 (即当前的 X_test_sample)
-    
-    for train_idx, _ in tscv.split(X_train_window):
-        # 获取 CV 的训练子集
-        X_cv_train = X_train_window.iloc[train_idx]
-        y_cv_train = y_train_window.iloc[train_idx]
+    def prepare_data(self, file_path=None):
+        """
+        加载并准备数据特征
+        """
+        if file_path is None:
+            file_path = os.path.join(self.project_root, 'data', 'lottery', 'predict_lottery_cold.csv')
         
-        # 训练模型
-        model = LogisticRegression(solver='liblinear', random_state=42, class_weight='balanced')
-        model.fit(X_cv_train, y_cv_train)
+        if not os.path.exists(file_path):
+            print(f"警告: 找不到预测数据文件 {file_path}")
+            return None
+
+        df = pd.read_csv(file_path)
+        df = df.set_index("期数id")
         
-        # 预测当前测试样本的概率 (关注类别 1 '冷门')
-        prob = model.predict_proba(X_test_sample)[0][1]
-        preds_prob.append(prob)
-    
-    # 取 5 次预测概率的平均值
-    avg_prob = np.mean(preds_prob)
-    final_pred = 1 if avg_prob >= 0.4 else 0
-    
-    y_true_all.append(y_test_sample)
-    y_pred_all.append(final_pred)
-    y_prob_all.append(avg_prob)
-    
-    current_period = df3.index[i]
-    print(f"期号: {current_period} | 真实: {y_test_sample} | 预测: {final_pred} (概率: {avg_prob:.4f})")
+        # 特征工程：增加滞后项 (N-1, N-2 期是否冷门)
+        df["N-1为1"] = df["target"].shift(1)
+        df["N-2为1"] = df["target"].shift(2)
+        df = df.dropna(axis=0)
 
-# 评估指标
-print("\n" + "="*50)
-print(f"最后 {TEST_SIZE} 期预测评估结果")
-print("="*50)
+        # 选定特征列
+        # 排除非特征列 '赛果冷热' 和 'target'
+        self.feature_cols = [c for c in df.columns if c not in ['赛果冷热', 'target']]
+        self.data = df
+        return df
 
-print("\n分类报告:")
-print(classification_report(y_true_all, y_pred_all))
+    def predict_single(self, target_period_id):
+        """
+        对单期进行预测：使用滚动窗口训练 + 5CV 平均概率
+        """
+        if self.data is None:
+            self.prepare_data()
+        
+        if self.data is None or target_period_id not in self.data.index:
+            return 0, 0.0
 
-print("\n混淆矩阵:")
-cm = confusion_matrix(y_true_all, y_pred_all)
-print(cm)
+        target_idx = self.data.index.get_loc(target_period_id)
+        
+        # 如果数据量不足以支撑窗口大小，返回默认值
+        if target_idx < self.window_size:
+            return 0, 0.0
 
-# 额外指标
-acc = accuracy_score(y_true_all, y_pred_all)
-prec = precision_score(y_true_all, y_pred_all, zero_division=0)
-rec = recall_score(y_true_all, y_pred_all, zero_division=0)
-f1 = f1_score(y_true_all, y_pred_all, zero_division=0)
+        # 获取训练窗口 [i - WINDOW_SIZE, i)
+        train_start = target_idx - self.window_size
+        train_end = target_idx
+        
+        X_all = self.data[self.feature_cols]
+        y_all = self.data['target']
+        
+        X_train_window = X_all.iloc[train_start:train_end]
+        y_train_window = y_all.iloc[train_start:train_end]
+        X_test_sample = X_all.iloc[target_idx:target_idx+1]
+        
+        # 5折时间序列交叉验证
+        tscv = TimeSeriesSplit(n_splits=self.n_splits)
+        preds_prob = []
+        
+        for train_idx, _ in tscv.split(X_train_window):
+            X_cv_train = X_train_window.iloc[train_idx]
+            y_cv_train = y_train_window.iloc[train_idx]
+            
+            # 使用逻辑回归 (保持原算法要求)
+            model = LogisticRegression(solver='liblinear', random_state=42, class_weight='balanced')
+            model.fit(X_cv_train, y_cv_train)
+            
+            # 预测类别 1 (冷门) 的概率
+            prob = model.predict_proba(X_test_sample)[0][1]
+            preds_prob.append(prob)
+            
+        # 取 5 次预测概率的平均值
+        avg_prob = np.mean(preds_prob)
+        final_pred = 1 if avg_prob >= self.threshold else 0
+        return final_pred, avg_prob
 
-print(f"\n准确率 (Accuracy): {acc:.4f}")
-print(f"精确率 (Precision): {prec:.4f}")
-print(f"召回率 (Recall):    {rec:.4f}")
-print(f"F1分数 (F1 Score):  {f1:.4f}")
+    def batch_predict(self, period_ids):
+        """
+        批量预测一组期号
+        """
+        if self.data is None:
+            self.prepare_data()
+            
+        results = {}
+        for pid in period_ids:
+            pred, prob = self.predict_single(pid)
+            results[pid] = {'pred': pred, 'prob': prob}
+        return results
+
+    def run_evaluation(self, test_size=100):
+        """
+        运行回测评估并输出指标
+        """
+        if self.data is None:
+            self.prepare_data()
+            
+        test_indices = range(len(self.data) - test_size, len(self.data))
+        y_true = []
+        y_pred = []
+        period_ids = []
+        
+        print(f"开始滚动窗口回测评估 (测试期数: {test_size})...")
+        
+        for i in test_indices:
+            pid = self.data.index[i]
+            pred, prob = self.predict_single(pid)
+            y_true.append(self.data['target'].iloc[i])
+            y_pred.append(pred)
+            period_ids.append(pid)
+            
+        # 输出分类报告
+        print("\n" + "="*50)
+        print(f"机器学习模型 - 最后 {test_size} 期预测评估")
+        print("="*50)
+        print(classification_report(y_true, y_pred))
+        
+        # 混淆矩阵
+        print("\n混淆矩阵:")
+        print(confusion_matrix(y_true, y_pred))
+        
+        # 综合指标
+        acc = accuracy_score(y_true, y_pred)
+        prec = precision_score(y_true, y_pred, zero_division=0)
+        rec = recall_score(y_true, y_pred, zero_division=0)
+        f1 = f1_score(y_true, y_pred, zero_division=0)
+
+        print(f"\n指标汇总:")
+        print(f"- 准确率 (Accuracy): {acc:.4f}")
+        print(f"- 精确率 (Precision): {prec:.4f}")
+        print(f"- 召回率 (Recall):    {rec:.4f}")
+        print(f"- F1分数 (F1 Score):  {f1:.4f}")
+        
+        return pd.DataFrame({
+            '期号': period_ids,
+            '真实': y_true,
+            '预测': y_pred
+        })
+
+if __name__ == "__main__":
+    # 脚本模式下的自测逻辑
+    predictor = ColdnessPredictor(threshold=0.4)
+    predictor.run_evaluation(test_size=100)
+

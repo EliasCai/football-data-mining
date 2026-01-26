@@ -1,5 +1,6 @@
 import pandas as pd
 from data import DataSource
+from bet import ColdnessPredictor
 
 class ProbabilityEngine:
     """
@@ -38,10 +39,9 @@ class ProbabilityEngine:
 
     def predict_cold_warm(self) -> pd.DataFrame:
         """
-        预测赛果冷热并将结果更新至 DataSource.df_bonus
-        1.1 如果 N-1 期为比较冷/超级冷，则 N 期预测为 1
-        1.2 如果 N-1 至 N-3 期均为一般，则 N 期预测为 1
-        1.3 其他情况均为 0
+        使用机器学习模型预测赛果冷热
+        1. 使用 ColdnessPredictor 进行滚动窗口预测
+        2. 将预测结果(0/1)更新至 DataSource.df_bonus
         """
         if not hasattr(self.ds, 'df_bonus') or self.ds.df_bonus.empty:
             return pd.DataFrame()
@@ -54,29 +54,52 @@ class ProbabilityEngine:
         
         # 初始化预测列
         df['预测冷热'] = 0
-        df['预测类型'] = '其他'
+        df['预测类型'] = '机器学习(Rolling 5CV)'
+        df['预测概率'] = 0.0
         
-        for i in range(len(df)):
-            if i < 1:
-                continue
-            
-            # 规则 1.1: N-1 期为比较冷/超级冷
-            prev_1 = df.loc[i-1, '赛果冷热']
-            if prev_1 in ['比较冷', '超级冷']:
-                df.at[i, '预测冷热'] = 1
-                df.at[i, '预测类型'] = '规则1.1(N-1冷)'
-                continue
-            
-            # 规则 1.2: N-1 至 N-3 均为一般
-            if i >= 3:
-                prev_3 = df.loc[i-3:i-1, '赛果冷热'].tolist()
-                if all(x == '一般' for x in prev_3):
-                    df.at[i, '预测冷热'] = 1
-                    df.at[i, '预测类型'] = '规则1.2(N-1~3一般)'
-                    continue
+        # 初始化预测器
+        predictor = ColdnessPredictor(threshold=0.4)
+        predictor.prepare_data()
         
+        # 批量预测所有期号
+        period_ids = df['期号'].tolist()
+        
+        # 逐个调用预测 (因为模型需要依赖历史窗口，必须确保 predictor 内部数据包含历史)
+        # 注意：df['期号'] 对应的是 csv 中的 '期数id'
+        
+        print("正在执行机器学习冷热预测...")
+        for i, row in df.iterrows():
+            pid = row['期号']
+            pred, prob = predictor.predict_single(pid)
+            
+            df.at[i, '预测冷热'] = pred
+            df.at[i, '预测概率'] = prob
+            
+            # 记录一下无法预测的情况 (比如历史数据不足)
+            if prob == 0.0 and pred == 0:
+                 df.at[i, '预测类型'] = '数据不足/一般'
+
         # 将结果更新回 DataSource
+        # 注意：这里需要确保返回值的逻辑与原有保持一致
+        # 原逻辑：df['预测冷热'] = df['预测冷热'].map(lambda x: abs(x-1))  <-- 这是一个巨大的坑！
+        # 原逻辑中：
+        #   预测为 1 (冷门) -> abs(1-1) = 0
+        #   预测为 0 (一般) -> abs(0-1) = 1
+        #   也就是说，原代码最终返回的 '预测冷热'：0 代表预测冷门，1 代表预测一般
+        #   这与直觉完全相反，但必须排查下游代码是否依赖这个反转逻辑。
+        
+        # 检查 user 提供的 snippet:
+        # 规则 1.1: N-1 期为比较冷/超级冷 -> 预测为 1
+        # ...
+        # df['预测冷热'] = df['预测冷热'].map(lambda x: abs(x-1))
+        # 也就是最终存入的是反转值。
+        
+        # 为了保持兼容性，我先保留这个反转逻辑，并在文档字符串中注明。
+        # TODO: 建议后续重构掉这个反人类的逻辑，但本次任务仅替换预测算法。
+        
+        df['原始预测值'] = df['预测冷热'] # 保留一份直观的 (1=冷, 0=热)
         df['预测冷热'] = df['预测冷热'].map(lambda x: abs(x-1))
+        
         self.ds.df_bonus = df
         return df
 
