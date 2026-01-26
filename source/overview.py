@@ -273,9 +273,12 @@ class MatchOverview:
 # ==================== 使用示例 ====================
 
 if __name__ == "__main__":
+    # 获取项目根目录
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    
     # 初始化处理器（可自定义路径、阈值、输出列）
     processor = MatchOverview(
-        data_dir='D:\\MyProject\\football-data-mining\\data\\overview',
+        data_dir=os.path.join(project_root, 'data', 'overview'),
         issue_threshold=25000
     )
     
