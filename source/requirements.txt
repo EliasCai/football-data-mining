@@ -1,0 +1,5 @@
+# pip install -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple 
+beautifulsoup4 
+lxml
+pandas
+scikit-learn
