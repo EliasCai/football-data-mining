@@ -330,7 +330,8 @@ if __name__ == "__main__":
     strategy_configs = {
         'strategy_01': {'i': 1, 'j': 3, 'k': 3, 'l': 2},
         'strategy_02': {'i': 1, 'j': 3, 'k': 4, 'l': 1},
-        'strategy_03': {'i': 2, 'j': 3, 'k': 3, 'l': 1}
+        'strategy_03': {'i': 2, 'j': 3, 'k': 3, 'l': 1},
+        'strategy_04': {'i': 2, 'j': 3, 'k': 3, 'l': 1}
     }
     scenarios = ['all', 'only_cold']
     
@@ -381,24 +382,33 @@ if __name__ == "__main__":
         s1_wins = winning_periods_map.get(('strategy_01', scenario), set())
         s2_wins = winning_periods_map.get(('strategy_02', scenario), set())
         s3_wins = winning_periods_map.get(('strategy_03', scenario), set())
+        s4_wins = winning_periods_map.get(('strategy_04', scenario), set())
 
         # 三策略交集
         intersection_123 = s1_wins.intersection(s2_wins).intersection(s3_wins)
+        intersection_1234 = s1_wins.intersection(s2_wins).intersection(s3_wins).intersection(s4_wins)
         # 两两交集
         intersection_12 = s1_wins.intersection(s2_wins)
         intersection_13 = s1_wins.intersection(s3_wins)
+        intersection_14 = s1_wins.intersection(s4_wins)
         intersection_23 = s2_wins.intersection(s3_wins)
+        intersection_24 = s2_wins.intersection(s4_wins)
+        intersection_34 = s3_wins.intersection(s4_wins)
 
         print(f"场景: {scenario_name}")
         print(f"  - strategy_01 中奖期数: {len(s1_wins)}")
         print(f"  - strategy_02 中奖期数: {len(s2_wins)}")
         print(f"  - strategy_03 中奖期数: {len(s3_wins)}")
-        print(f"  - 三个策略共同中奖期数: {len(intersection_123)}")
+        print(f"  - strategy_04 中奖期数: {len(s4_wins)}")
+        print(f"  - 四个策略共同中奖期数: {len(intersection_1234)}")
         print(f"  - S1&S2共同中奖期数: {len(intersection_12)}")
         print(f"  - S1&S3共同中奖期数: {len(intersection_13)}")
+        print(f"  - S1&S4共同中奖期数: {len(intersection_14)}")
         print(f"  - S2&S3共同中奖期数: {len(intersection_23)}")
-        if intersection_123:
-            print(f"  - 三策略共同中奖期号: {sorted(list(intersection_123))}")
+        print(f"  - S2&S4共同中奖期数: {len(intersection_24)}")
+        print(f"  - S3&S4共同中奖期数: {len(intersection_34)}")
+        if intersection_1234:
+            print(f"  - 四策略共同中奖期号: {sorted(list(intersection_1234))}")
         print("-" * 40)
     print("="*80)
 
