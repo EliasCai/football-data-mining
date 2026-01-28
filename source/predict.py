@@ -126,5 +126,5 @@ def run_prediction(period_id: str):
         print("\n" + pd.DataFrame(cost_rows).to_markdown(index=False))
 if __name__ == "__main__":
     # 测试最新一期
-    target_id = "26018"
+    target_id = "26019"
     run_prediction(target_id)

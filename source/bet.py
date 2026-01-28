@@ -262,6 +262,6 @@ if __name__ == "__main__":
     predictor.run_evaluation(test_size=100)
     
     # 2. 测试最新一期的预测
-    id_to_process = "26018"
+    id_to_process = "26019"
     predictor.predict_latest(id_to_process)
 
