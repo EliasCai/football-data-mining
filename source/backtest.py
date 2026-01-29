@@ -158,14 +158,23 @@ class Ren9Backtest:
         total_payout = self.results['奖金'].sum()
         total_cost = self.results['投注成本'].sum()
         
+        # 计算中位数
+        median_cost = self.results['投注成本'].median()
+        
+        # 仅针对中奖期的奖金中位数 (更有参考意义)
+        winning_results = self.results[self.results['是否中奖'] == True]
+        median_win_payout = winning_results['奖金'].median() if not winning_results.empty else 0.0
+        
         report = {
             '命中率': self.results['是否中奖'].mean(),
             'ROI': (total_payout - total_cost) / total_cost if total_cost > 0 else 0,
             '总投注期数': len(self.results),
-            '中奖期数': self.results['是否中奖'].sum(),
+            '中奖期数': len(winning_results),
             '累计投入': total_cost,
             '累计奖金': total_payout,
-            '累计净收益': total_payout - total_cost
+            '累计净收益': total_payout - total_cost,
+            '投注成本中位数': median_cost,
+            '中奖奖金中位数': median_win_payout
         }
         return report
 
@@ -224,6 +233,8 @@ class Ren9Backtest:
         print(f"累计投入: {report['累计投入']:.2f} 元")
         print(f"累计奖金: {report['累计奖金']:.2f} 元")
         print(f"累计净收益: {report['累计净收益']:.2f} 元")
+        print(f"成本中位数: {report['投注成本中位数']:.2f} 元")
+        print(f"中奖奖金中位数: {report['中奖奖金中位数']:.2f} 元")
         print(f"ROI: {report['ROI']:.2%}")
         print("=" * 50)
 
@@ -384,12 +395,13 @@ if __name__ == "__main__":
             if report:
                 summary_results.append({
                     '策略': strategy,
-                    '参数': f"i={params['i']},j={params['j']},k={params['k']},l={params['l']}",
                     '场景': '每期投注' if scenario == 'all' else '仅预测冷',
                     '期数': report['总投注期数'],
                     '中奖': report['中奖期数'],
                     '命中率': f"{report['命中率']:.2%}",
-                    'ROI': f"{report['ROI']:.2%}"
+                    'ROI': f"{report['ROI']:.2%}",
+                    '成本中位数': f"{report['投注成本中位数']:.1f}",
+                    '中奖中位数': f"{report['中奖奖金中位数']:.1f}"
                 })
     
     print("\n" + "="*80)

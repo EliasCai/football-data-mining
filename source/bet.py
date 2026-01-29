@@ -31,10 +31,18 @@ class ColdnessPredictor:
 
         df = pd.read_csv(file_path)
         
+        # 加载奖金数据并合并
+        results_path = os.path.join(self.project_root, 'data', 'lottery', 'football_lottery_results.csv')
+        if os.path.exists(results_path):
+            df_results = pd.read_csv(results_path)
+            # 确保期号列一致
+            df_results = df_results.rename(columns={'期号': '期数id'})
+            df = df.merge(df_results[['期数id', '一等奖']], on='期数id', how='left')
+        
         # 如果有最新一期的数据，进行整合
         if latest_df is not None:
-            # 确保列顺序一致，且包含 target 和 赛果冷热（填充为 NaN）
-            for col in ['赛果冷热', 'target']:
+            # 确保列顺序一致，且包含 target、赛果冷热、一等奖（填充为 NaN）
+            for col in ['赛果冷热', 'target', '一等奖']:
                 if col not in latest_df.columns:
                     latest_df[col] = np.nan
             
@@ -49,7 +57,7 @@ class ColdnessPredictor:
         df["N-2为1"] = df["target"].shift(2)
         
         # 记录特征列名（不包含目标列和描述列）
-        self.feature_cols = [c for c in df.columns if c not in ['赛果冷热', 'target']]
+        self.feature_cols = [c for c in df.columns if c not in ['赛果冷热', 'target', '一等奖']]
         
         # 删除特征中包含 NaN 的行（主要是前两期的滞后项）
         df = df.dropna(subset=self.feature_cols)
@@ -216,6 +224,7 @@ class ColdnessPredictor:
         y_true = []
         y_pred = []
         period_ids = []
+        bonuses = []
         
         print(f"开始滚动窗口回测评估 (测试期数: {test_size})...")
         
@@ -225,6 +234,7 @@ class ColdnessPredictor:
             y_true.append(self.data['target'].iloc[i])
             y_pred.append(pred)
             period_ids.append(pid)
+            bonuses.append(self.data['一等奖'].iloc[i] if '一等奖' in self.data.columns else 0)
             
         # 输出分类报告
         print("\n" + "="*50)
@@ -242,16 +252,33 @@ class ColdnessPredictor:
         rec = recall_score(y_true, y_pred, zero_division=0)
         f1 = f1_score(y_true, y_pred, zero_division=0)
 
+        # 计算平均奖金
+        df_eval = pd.DataFrame({
+            'target': y_true,
+            'pred': y_pred,
+            'bonus': bonuses
+        })
+        
+        avg_bonus_actual_cold = df_eval[df_eval['target'] == 1]['bonus'].mean()
+        avg_bonus_pred_cold = df_eval[df_eval['pred'] == 1]['bonus'].mean()
+        avg_bonus_tp = df_eval[(df_eval['target'] == 1) & (df_eval['pred'] == 1)]['bonus'].mean()
+
         print(f"\n指标汇总:")
         print(f"- 准确率 (Accuracy): {acc:.4f}")
         print(f"- 精确率 (Precision): {prec:.4f}")
         print(f"- 召回率 (Recall):    {rec:.4f}")
         print(f"- F1分数 (F1 Score):  {f1:.4f}")
         
+        print(f"\n奖金统计 (冷门期):")
+        print(f"- 实际冷门平均奖金: {avg_bonus_actual_cold:.2f} 元")
+        print(f"- 预测冷门平均奖金: {avg_bonus_pred_cold:.2f} 元")
+        print(f"- 命中冷门平均奖金: {avg_bonus_tp:.2f} 元")
+        
         return pd.DataFrame({
             '期号': period_ids,
             '真实': y_true,
-            '预测': y_pred
+            '预测': y_pred,
+            '奖金': bonuses
         })
 
 if __name__ == "__main__":
