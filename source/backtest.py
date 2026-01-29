@@ -310,6 +310,31 @@ def print_win_cycle_report(win_cycle_stats: dict):
 
     print("="*80)
 
+def print_strategy_win_stats(winning_periods_map: dict, strategies: list, scenarios: list):
+    """
+    仅统计每种策略的中奖期数
+    
+    Args:
+        winning_periods_map: {(strategy, scenario): set(中奖期号)}
+        strategies: 需要统计的策略列表
+        scenarios: 需要统计的场景列表
+    """
+    print("\n" + "="*80)    
+    print("【各策略中奖期数统计】")
+    print("="*80)
+    
+    for scenario in scenarios:
+        scenario_name = '每期投注' if scenario == 'all' else '仅预测冷'
+        print(f"场景: {scenario_name}")
+        
+        for strategy in strategies:
+            wins = winning_periods_map.get((strategy, scenario), set())
+            print(f"  - {strategy} 中奖期数: {len(wins)}")
+            if wins:
+                print(f"    中奖期号: {sorted(list(wins))}")
+        print("-" * 40)
+    print("="*80)
+
 if __name__ == "__main__":
     from data import DataSource
     from engine import ProbabilityEngine
@@ -373,44 +398,8 @@ if __name__ == "__main__":
     summary_df = pd.DataFrame(summary_results)
     print(summary_df.to_string(index=False))
     
-    # 统计策略间中奖期号的交集
-    print("\n" + "="*80)    
-    print("【策略中奖交集统计】")
-    print("="*80)
-    for scenario in scenarios:
-        scenario_name = '每期投注' if scenario == 'all' else '仅预测冷'
-        s1_wins = winning_periods_map.get(('strategy_01', scenario), set())
-        s2_wins = winning_periods_map.get(('strategy_02', scenario), set())
-        s3_wins = winning_periods_map.get(('strategy_03', scenario), set())
-        s4_wins = winning_periods_map.get(('strategy_04', scenario), set())
-
-        # 三策略交集
-        intersection_123 = s1_wins.intersection(s2_wins).intersection(s3_wins)
-        intersection_1234 = s1_wins.intersection(s2_wins).intersection(s3_wins).intersection(s4_wins)
-        # 两两交集
-        intersection_12 = s1_wins.intersection(s2_wins)
-        intersection_13 = s1_wins.intersection(s3_wins)
-        intersection_14 = s1_wins.intersection(s4_wins)
-        intersection_23 = s2_wins.intersection(s3_wins)
-        intersection_24 = s2_wins.intersection(s4_wins)
-        intersection_34 = s3_wins.intersection(s4_wins)
-
-        print(f"场景: {scenario_name}")
-        print(f"  - strategy_01 中奖期数: {len(s1_wins)}")
-        print(f"  - strategy_02 中奖期数: {len(s2_wins)}")
-        print(f"  - strategy_03 中奖期数: {len(s3_wins)}")
-        print(f"  - strategy_04 中奖期数: {len(s4_wins)}")
-        print(f"  - 四个策略共同中奖期数: {len(intersection_1234)}")
-        print(f"  - S1&S2共同中奖期数: {len(intersection_12)}")
-        print(f"  - S1&S3共同中奖期数: {len(intersection_13)}")
-        print(f"  - S1&S4共同中奖期数: {len(intersection_14)}")
-        print(f"  - S2&S3共同中奖期数: {len(intersection_23)}")
-        print(f"  - S2&S4共同中奖期数: {len(intersection_24)}")
-        print(f"  - S3&S4共同中奖期数: {len(intersection_34)}")
-        if intersection_1234:
-            print(f"  - 四策略共同中奖期号: {sorted(list(intersection_1234))}")
-        print("-" * 40)
-    print("="*80)
+    # 统计各策略中奖期数
+    print_strategy_win_stats(winning_periods_map, list(strategy_configs.keys()), scenarios)
 
     # 统计各策略中奖周期
     win_cycle_stats = calculate_win_cycle_stats(winning_periods_map)
