@@ -7,7 +7,7 @@ class DataSource:
     """
     存储并提供所有静态历史数据，作为 RX9-Alpha 系统的核心参数源
     """
-    def __init__(self):
+    def __init__(self, issue_threshold: int = 25000):
         # 获取项目根目录 (source 的上一级)
         self.project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         
@@ -67,7 +67,7 @@ class DataSource:
         # 初始化处理器（可自定义路径、阈值、输出列）
         processor = MatchOverview(
             data_dir=os.path.join(self.project_root, 'data', 'overview'),
-            issue_threshold=25000
+            issue_threshold=issue_threshold
         )
     
         self.df_matches = processor.load_data().process().get_output()

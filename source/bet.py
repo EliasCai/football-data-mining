@@ -40,15 +40,20 @@ class ColdnessPredictor:
             df = df.merge(df_results[['期数id', '一等奖']], on='期数id', how='left')
         
         # 如果有最新一期的数据，进行整合
-        if latest_df is not None:
+        if latest_df is not None and not latest_df.empty:
             # 确保列顺序一致，且包含 target、赛果冷热、一等奖（填充为 NaN）
             for col in ['赛果冷热', 'target', '一等奖']:
                 if col not in latest_df.columns:
                     latest_df[col] = np.nan
             
-            # 保证列顺序与历史数据一致
-            latest_df = latest_df[df.columns]
-            df = pd.concat([df, latest_df], ignore_index=True)
+            # 确保最新数据中不包含已经存在于历史数据中的期数，避免重复
+            existing_ids = df['期数id'].unique()
+            latest_df = latest_df[~latest_df['期数id'].isin(existing_ids)]
+            
+            if not latest_df.empty:
+                # 保证列顺序与历史数据一致
+                latest_df = latest_df[df.columns]
+                df = pd.concat([df, latest_df], ignore_index=True)
 
         df = df.set_index("期数id")
         
@@ -158,6 +163,12 @@ class ColdnessPredictor:
 
         target_idx = self.data.index.get_loc(target_period_id)
         
+        # 如果有重复索引，get_loc 可能返回 slice 或 boolean array，这里取最后一个
+        if isinstance(target_idx, slice):
+            target_idx = target_idx.stop - 1
+        elif isinstance(target_idx, np.ndarray):
+            target_idx = np.where(target_idx)[0][-1]
+
         # 如果数据量不足以支撑窗口大小，返回默认值
         if target_idx < self.window_size:
             return 0, 0.0
