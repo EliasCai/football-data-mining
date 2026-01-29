@@ -60,6 +60,8 @@ def run_prediction(period_id: str):
 
     # 6. 整合并打印 Markdown 表格
     table_rows = []
+    # print(df_period)
+    df_period.to_csv(f"{period_id}.csv", index=False, encoding='utf-8-sig')
     for idx, row in df_period.iterrows():
         match_row = {
             '场次': idx + 1,
